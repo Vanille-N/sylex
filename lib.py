@@ -63,6 +63,9 @@ class File:
     def path(self):
         return self.dir + "/" + self.name + "." + (self.ext or "tex")
 
+    def name_of_path(self):
+        return self.path().replace("/", "__").replace("__", "/", 1)
+
     def __str__(self):
         return "File({})".format(self.path())
 

@@ -12,6 +12,7 @@ from error import Err
 import lib
 import parse
 from args import Args
+from expand import expand
 
 def print_common():
     with open(f"{lib.templ_dir}/common.tex.mk.j2", 'r') as f:
@@ -44,7 +45,7 @@ def print_init():
             f.write(text.replace("    ", "\t"))
     # Also clone source into .sylex
     os.makedirs(".sylex", exist_ok=True)
-    for mod in ["args", "lib", "error", "parse", "sylex"]:
+    for mod in ["args", "lib", "error", "parse", "sylex", "expand"]:
         with open(f"{lib.slx_dir}/{mod}.py", 'r') as f:
             text = f.read()
         with open(f".sylex/{mod}.py", 'w') as f:
@@ -67,6 +68,8 @@ def main(args):
             return
     elif args.mode == "init":
         print_init()
+    elif args.mode == "expand":
+        expand(args.file)
     elif args.mode == "build":
         if os.path.isfile(args.dest):
             os.remove(args.dest)

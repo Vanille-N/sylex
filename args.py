@@ -14,6 +14,7 @@ class Args:
     def __init__(self, args):
         self.fail = None
         self.name = None
+        self.file = None
         Err.in_file("<cmdline>")
         self.action = None
         self.mode = None
@@ -44,6 +45,8 @@ class Args:
                             msg="can only perform one action at a time",
                         )
                     self.action = "parse"
+                elif self.mode == "expand" and key == "file":
+                    self.file = value
                 else:
                     Err.report(
                         kind="Argparse: No Keyword",
@@ -56,6 +59,8 @@ class Args:
                     self.mode = "build"
                 elif a == "init":
                     self.mode = "init"
+                elif a == "expand":
+                    self.mode = "expand"
                 elif a == "help":
                     print("Help unavailable at the moment")
                     sys.exit(255)

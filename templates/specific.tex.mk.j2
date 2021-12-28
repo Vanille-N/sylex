@@ -22,11 +22,13 @@ override HEADERS_{{name}} = \{#
 #}{% for file in hdr %}
     {{file}} \{#
 #}{% endfor %}
+    #
 
 override MAKES_{{name}} = \
     build/doc_{{name}}.tex.mk \
     build/common-tex.mk \
-    Makefile
+    Makefile \
+    #
 
 {{name}}.pdf: \
     $(TEX_FIG_{{name}}) \

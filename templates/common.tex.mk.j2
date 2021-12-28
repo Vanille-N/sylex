@@ -4,31 +4,15 @@ TEXFLAGS = --halt-on-error --interaction=nonstopmode
 TEXC = pdflatex $(TEXFLAGS)
 
 compile:
-    cd $(DIR) && $(TEXC) $(FILE) | \
+    cd build && $(TEXC) $(FILE) | \
         grep -Ev 'texmf-dist|\.code\.tex|\.dict|^[^(]*\)' | \
         sed '/^[[:space:]]*$$/d'
 
-build/%.tex: src/%.tex
-    mkdir -p $$(dirname $@)
-    cp $< $@
-    # Reroot
-    ROOT="$$(realpath build)"; \
-    HERE="$$(dirname $$(realpath $@))"; \
-    echo "ROOT=$${ROOT} HERE=$${HERE}"; \
-    sed -Ei \
-        -e 's,(\\(input|includegraphics).*\{)\$$\(ROOT\),\1'"$${ROOT}"',g;'\
-        -e 's,(\\(input|includegraphics).*\{)\$$\(HERE\),\1'"$${HERE}"',g;'\
-        $@
-
-build/%: src/%
-    mkdir -p $$(dirname $@)
-    cp $< $@
-
 build/%.pdf: build/%.tex
-    make DIR=$$(dirname $@) FILE=$$(basename $<) compile
+    make FILE=$$(basename $<) compile
 
 texwatch:
-    .sylex/sylex.py make watcher
+    python3 .sylex/sylex.py make watcher
 
 TARGET = all
 loop: texwatch

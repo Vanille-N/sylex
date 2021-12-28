@@ -187,22 +187,28 @@ class Cfg:
             template = j2.Template(f.read())
         text = template.render(
             name=args.name,
-            txt=[f.with_prefix("build").path() for f in self.txt + [lib.File(args.name)]],
-            fig=[f.with_prefix("build").try_pdf().path() for f in self.fig],
-            bib=[f.with_prefix("build").path() for f in self.bib],
-            hdr=[f.with_prefix("build").path() for f in self.hdr],
+            txt=[f.with_prefix("build").name_of_path() for f in self.txt + [lib.File(args.name)]],
+            fig=[f.with_prefix("build").try_pdf().name_of_path() for f in self.fig],
+            bib=[f.with_prefix("build").name_of_path() for f in self.bib],
+            hdr=[f.with_prefix("build").name_of_path() for f in self.hdr],
             hasbib=(len(self.bib) > 0),
             header=lib.autogen_header,
         )
         with open(args.dest, 'w') as f:
             f.write(text.replace("    ", '\t'))
+            for sources in self.txt + [lib.File(args.name)] + self.fig + self.bib + self.hdr:
+                f.write("{}: {}\n\tcp $< $@\n".format(
+                    sources.with_prefix("build").name_of_path(),
+                    sources.with_prefix("src").path(),
+                ))
+                f.write("\tpython3 .sylex/sylex.py expand file=$@\n")
             graph = Refs.into_graph(self.refs)
             for pre in graph:
                 post = graph[pre]
                 if type(pre) == lib.File:
                     f.write("{}: {}\n".format(
-                        pre.with_prefix("build").path(),
-                        " ".join(p.with_prefix("build").path() for ps in post for p in graph[ps]),
+                        pre.with_prefix("build").name_of_path(),
+                        " ".join(p.with_prefix("build").name_of_path() for ps in post for p in graph[ps]),
                     ))
             f.write("\n")
 
