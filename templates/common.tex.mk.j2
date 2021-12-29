@@ -12,7 +12,7 @@ build/%.pdf: build/%.tex
     make FILE=$$(basename $<) compile
 
 texwatch:
-    python3 .sylex/sylex.py make watcher
+    python3 .sylex/sylex.py make --watcher
 
 TARGET = all
 loop: texwatch

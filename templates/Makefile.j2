@@ -10,10 +10,10 @@ BUILDER = python3 .sylex/sylex.py
 all: $(SPECS) $(DOC:%=%.pdf)
 
 build/common-tex.mk:
-    $(BUILDER) make common
+    $(BUILDER) make --common
 
 build/doc_%.tex.mk: cfg_%.slx
-    $(BUILDER) build name=$* fail=WARNING
+    $(BUILDER) build --proj $* --level WARNING
 
 include build/common-tex.mk
 include $(SPECS)

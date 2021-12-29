@@ -182,26 +182,26 @@ class Cfg:
                     )
                 return (file, tag, refs)
 
-    def print(self, args):
+    def print(self, proj):
         with open(f"{lib.templ_dir}/specific.tex.mk.j2", 'r') as f:
             template = j2.Template(f.read())
         text = template.render(
-            name=args.name,
-            txt=[f.with_prefix("build").name_of_path() for f in self.txt + [lib.File(args.name)]],
+            name=proj.name,
+            txt=[f.with_prefix("build").name_of_path() for f in self.txt + [lib.File(proj.name)]],
             fig=[f.with_prefix("build").try_pdf().name_of_path() for f in self.fig],
             bib=[f.with_prefix("build").name_of_path() for f in self.bib],
             hdr=[f.with_prefix("build").name_of_path() for f in self.hdr],
             hasbib=(len(self.bib) > 0),
             header=lib.autogen_header,
         )
-        with open(args.dest, 'w') as f:
+        with open(proj.dest, 'w') as f:
             f.write(text.replace("    ", '\t'))
-            for sources in self.txt + [lib.File(args.name)] + self.fig + self.bib + self.hdr:
+            for sources in self.txt + [lib.File(proj.name)] + self.fig + self.bib + self.hdr:
                 f.write("{}: {}\n\tcp $< $@\n".format(
                     sources.with_prefix("build").name_of_path(),
                     sources.with_prefix("src").path(),
                 ))
-                f.write("\tpython3 .sylex/sylex.py expand file=$@\n")
+                f.write("\tpython3 .sylex/sylex.py expand --file $@\n")
             graph = Refs.into_graph(self.refs)
             for pre in graph:
                 post = graph[pre]
@@ -213,15 +213,15 @@ class Cfg:
             f.write("\n")
 
 # Read file f (in the texmk format) and return a workable descriptor
-def parse_cfg(args):
-    with open(args.src, 'r') as f:
-        Err.in_file(args.src)
+def parse_cfg(proj, fail):
+    with open(proj.src, 'r') as f:
+        Err.in_file(proj.src)
         cfg = Cfg()
         for line in f.readlines():
             cfg.push(line.rstrip())
             if Err.fatality >= Err.WARNING:
                 return None
-        if args.fail <= Err.fatality:
+        if fail <= Err.fatality:
             return None
         else:
             return cfg
