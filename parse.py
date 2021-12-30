@@ -183,25 +183,41 @@ class Cfg:
                 return (file, tag, refs)
 
     def print(self, proj):
-        with open(f"{lib.templ_dir}/specific.tex.mk.j2", 'r') as f:
+        # Build
+        with open(f"{lib.templ_dir}/build.tex.mk.j2", 'r') as f:
             template = j2.Template(f.read())
         text = template.render(
             name=proj.name,
-            txt=[f.with_prefix("build").name_of_path() for f in self.txt + [lib.File(proj.name)]],
+            header=lib.autogen_header,
+            build=lib.build_dir,
+        )
+        with open(proj.dest_build, 'w') as f:
+            f.write(text.replace("    ", '\t'))
+        # Parameters
+        with open(f"{lib.templ_dir}/param.tex.mk.j2", 'r') as f:
+            template = j2.Template(f.read())
+        text = template.render(
+            name=proj.name,
+            txt=[f.with_prefix("build").name_of_path() for f in self.txt],
             fig=[f.with_prefix("build").try_pdf().name_of_path() for f in self.fig],
             bib=[f.with_prefix("build").name_of_path() for f in self.bib],
             hdr=[f.with_prefix("build").name_of_path() for f in self.hdr],
             hasbib=(len(self.bib) > 0),
+            py=[lib.File(f).with_prefix(f"{lib.local_slx_dir}").with_ext("py").path() for f in lib.py_files],
+            j2=[lib.File(f).with_prefix(f"{lib.local_templ_dir}").with_ext("j2").path() for f in lib.j2_files],
             header=lib.autogen_header,
+            build=lib.build_dir,
         )
-        with open(proj.dest, 'w') as f:
+        with open(proj.dest_param, 'w') as f:
             f.write(text.replace("    ", '\t'))
-            for sources in self.txt + [lib.File(proj.name)] + self.fig + self.bib + self.hdr:
+        # Dependencies
+        with open(proj.dest_deps, 'w') as f:
+            for sources in self.txt + self.fig + self.bib + self.hdr:
                 f.write("{}: {}\n\tcp $< $@\n".format(
                     sources.with_prefix("build").name_of_path(),
                     sources.with_prefix("src").path(),
                 ))
-                f.write("\tpython3 .sylex/sylex.py expand --file $@\n")
+                f.write("\t$(BUILDER) expand --file $@\n")
             graph = Refs.into_graph(self.refs)
             for pre in graph:
                 post = graph[pre]
@@ -224,5 +240,6 @@ def parse_cfg(proj, fail):
         if fail <= Err.fatality:
             return None
         else:
+            cfg.txt.append(lib.File(proj.name))
             return cfg
 
