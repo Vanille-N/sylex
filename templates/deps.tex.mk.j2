@@ -1,0 +1,11 @@
+{{header}}
+
+{% for src,dest in copy %}
+{{dest}}: {{src}}
+    cp $< $@
+    $(BUILDER) expand --file $@
+{% endfor %}
+
+{% for pre,post in extra %}
+{{pre}}: {{post}}
+{% endfor %}

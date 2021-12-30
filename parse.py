@@ -184,41 +184,64 @@ class Cfg:
 
     def print(self, proj):
         # Build
-        with open(f"{lib.templ_dir}/build.tex.mk.j2", 'r') as f:
-            template = j2.Template(f.read())
-        text = template.render(
-            name=proj.name,
-            header=lib.autogen_header,
-            build=lib.build_dir,
+        lib.j2_render(
+            "build.tex.mk",
+            proj.dest_build,
+            tabs=False,
+            params={
+                'name': proj.name,
+            },
         )
-        with open(proj.dest_build, 'w') as f:
-            f.write(text.replace("    ", '\t'))
         # Parameters
-        with open(f"{lib.templ_dir}/param.tex.mk.j2", 'r') as f:
-            template = j2.Template(f.read())
-        text = template.render(
-            name=proj.name,
-            txt=[f.with_prefix("build").name_of_path() for f in self.txt],
-            fig=[f.with_prefix("build").try_pdf().name_of_path() for f in self.fig],
-            bib=[f.with_prefix("build").name_of_path() for f in self.bib],
-            hdr=[f.with_prefix("build").name_of_path() for f in self.hdr],
-            hasbib=(len(self.bib) > 0),
-            py=[lib.File(f).with_prefix(f"{lib.local_slx_dir}").with_ext("py").path() for f in lib.py_files],
-            j2=[lib.File(f).with_prefix(f"{lib.local_templ_dir}").with_ext("j2").path() for f in lib.j2_files],
-            header=lib.autogen_header,
-            build=lib.build_dir,
+        into_build = lambda f: f.with_prefix("build").name_of_path()
+        into_pdf_build = lambda f: f.with_prefix("build").try_pdf().name_of_path()
+        lib.j2_render(
+            "param.tex.mk",
+            proj.dest_param,
+            tabs=False,
+            params={
+                'name': proj.name,
+                'groups': [{
+                    'label': 'TEX_SRC',
+                    'files': self.txt,
+                    'map': into_build,
+                },{
+                    'label': 'TEX_FIG',
+                    'files': self.fig,
+                    'map': into_pdf_build,
+                },{
+                    'label': 'BIBLIO',
+                    'files': self.bib,
+                    'map': into_build,
+                },{
+                    'label': 'HEADERS',
+                    'files': self.hdr,
+                    'map': into_build,
+                }],
+                'hasbib': (len(self.bib) > 0),
+            },
         )
-        with open(proj.dest_param, 'w') as f:
-            f.write(text.replace("    ", '\t'))
         # Dependencies
-        with open(proj.dest_deps, 'w') as f:
+        graph = Refs.into_graph(self.refs)
+        lib.j2_render(
+            "deps.tex.mk",
+            proj.dest_deps,
+            tabs=False,
+            params={
+                'copy': [(
+                    sources.with_prefix("src").path(),
+                    sources.with_prefix("build").name_of_path(),
+                ) for sources in self.txt + self.fig + self.bib + self.hdr],
+                'extra': [],
+            },
+        )
+        with open(proj.dest_deps + ".bak", 'w') as f:
             for sources in self.txt + self.fig + self.bib + self.hdr:
                 f.write("{}: {}\n\tcp $< $@\n".format(
                     sources.with_prefix("build").name_of_path(),
                     sources.with_prefix("src").path(),
                 ))
                 f.write("\t$(BUILDER) expand --file $@\n")
-            graph = Refs.into_graph(self.refs)
             for pre in graph:
                 post = graph[pre]
                 if type(pre) == lib.File:
