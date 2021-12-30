@@ -4,15 +4,15 @@ TEXFLAGS = --halt-on-error --interaction=nonstopmode
 TEXC = pdflatex $(TEXFLAGS)
 
 compile:
-    cd build && $(TEXC) $(FILE) | \
+    cd {{build}} && $(TEXC) $(FILE) | \
         grep -Ev 'texmf-dist|\.code\.tex|\.dict|^[^(]*\)' | \
         sed '/^[[:space:]]*$$/d'
 
-build/%.pdf: build/%.tex
+{{build}}/%.pdf: {{build}}/%.tex
     make FILE=$$(basename $<) compile
 
 texwatch:
-    python3 .sylex/sylex.py make --watcher
+    $(BUILDER) make --watcher
 
 TARGET = all
 loop: texwatch

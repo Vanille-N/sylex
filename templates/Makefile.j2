@@ -3,23 +3,23 @@
 TWICE = true
 
 include sylex.conf
-SPECS = $(DOC:%=build/doc_%.tex.mk)
+SPECS = $(DOC:%={{build}}/build_%.tex.mk)
 
 BUILDER = python3 .sylex/sylex.py
 
 all: $(SPECS) $(DOC:%=%.pdf)
 
-build/common-tex.mk:
+{{build}}/common-tex.mk:
     $(BUILDER) make --common
 
-build/doc_%.tex.mk: cfg_%.slx
+{{build}}/build_%.tex.mk: cfg_%.slx
     $(BUILDER) build --proj $* --level WARNING
 
-include build/common-tex.mk
+include {{build}}/common-tex.mk
 include $(SPECS)
 
 clean:
-    rm -rf build
+    rm -rf {{build}}
     rm -f $(DOC:%=%.pdf)
     rm -f texwatch
 
