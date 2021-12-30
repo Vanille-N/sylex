@@ -4,6 +4,8 @@
 import re
 import sys
 import os
+import shutil
+import jinja2 as j2
 
 slx_dir = "/".join(d for d in __file__.split("/")[:-1] if d != ".")
 templ_dir = f"{slx_dir}/templates"
@@ -42,6 +44,35 @@ def is_filename(s):
         ):
             return False
     return True
+
+def j2_render(src, dest, tabs=True, params={}):
+    with open(f"{templ_dir}/{src}.j2", 'r') as f:
+        template = j2.Template(f.read())
+    text = template.render(
+        header=autogen_header,
+        build=build_dir,
+        **params,
+    )
+    if not tabs:
+        text = text.replace(" "*4, "\t")
+    with open(dest, 'w') as f:
+        f.write(text)
+
+def rm_r(path):
+    if not os.path.exists(path):
+        return
+    if os.path.isfile(path) or os.path.islink(path):
+        os.unlink(path)
+    else:
+        shutil.rmtree(path)
+
+def copy_file(src, dest, file=None):
+    src = os.path.abspath(src)
+    dest = os.path.abspath(dest)
+    if file is not None:
+        src = f"{src}/{file}"
+        dest = f"{dest}/{file}"
+    shutil.copy(src, dest)
 
 class File:
     def __init__(self, path):

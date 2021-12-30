@@ -15,77 +15,56 @@ import lib
 import parse
 from expand import expand
 
-def j2_render(src, dest, tabs=True, **kwargs):
-    with open(f"{src}.j2", 'r') as f:
-        template = j2.Template(f.read())
-    text = template.render(
-        header=lib.autogen_header,
-        build=lib.build_dir,
-        **kwargs,
+def print_texwatch():
+    lib.j2_render(
+        "texwatch",
+        "texwatch",
     )
-    if not tabs:
-        text = text.replace(" "*4, "\t")
-    with open(dest, 'w') as f:
-        f.write(text)
+    os.chmod("texwatch", 0o755)
 
 def print_common():
     os.makedirs(f"{lib.build_dir}", exist_ok=True)
-    j2_render(
-        f"{lib.templ_dir}/common.tex.mk",
-        f"{lib.build_dir}/common-tex.mk",
+    lib.j2_render(
+        f"common.tex.mk",
+        f"{lib.build_dir}/common.tex.mk",
         tabs=False,
     )
-    #with open(f"{lib.templ_dir}/common.tex.mk.j2", 'r') as f:
-    #    template = j2.Template(f.read())
-    #text = template.render(header=lib.autogen_header)
-    #with open("build/common-tex.mk", 'w') as f:
-    #    f.write(text.replace("    ", "\t"))
-
-def print_texwatch():
-    with open(f"{lib.templ_dir}/texwatch.j2", 'r') as f:
-        template = j2.Template(f.read())
-    text = template.render(header=lib.autogen_header, build=lib.build_dir)
-    with open("texwatch", 'w') as f:
-        f.write(text)
-    os.chmod("texwatch", 0o755)
-
-def rm_r(path):
-    if not os.path.exists(path):
-        return
-    if os.path.isfile(path) or os.path.islink(path):
-        os.unlink(path)
-    else:
-        shutil.rmtree(path)
 
 def print_init():
-    rm_r(f"{lib.local_slx_dir}")
-    rm_r(f"{lib.build_dir}")
-    with open(f"{lib.templ_dir}/Makefile.j2", 'r') as f:
-        template = j2.Template(f.read())
-    text = template.render(header=lib.autogen_header, build=lib.build_dir)
-    with open("Makefile", 'w') as f:
-        f.write(text.replace("    ", "\t"))
+    if os.path.abspath(lib.local_slx_dir) == lib.slx_dir:
+        print("Warning: sylex launched with `init` is attempting to override itself")
+        print("Aborted")
+        return
+    lib.rm_r(f"{lib.local_slx_dir}")
+    lib.rm_r(f"{lib.build_dir}") 
+    # First clone source into .sylex
+    os.makedirs(f"{lib.local_slx_dir}", exist_ok=True)
+    for mod in lib.py_files:
+        lib.copy_file(
+            lib.slx_dir,
+            lib.local_slx_dir,
+            file=f"{mod}.py",
+        )
+    os.makedirs(f"{lib.local_templ_dir}", exist_ok=True)
+    for templ in lib.j2_files:
+        lib.copy_file(
+            lib.templ_dir,
+            lib.local_templ_dir,
+            file=f"{templ}.j2",
+        )
     # _If it doesn't exist_, clone .conf
     if not os.path.exists("sylex.conf"):
-        with open(f"{lib.templ_dir}/sylex.conf.j2", 'r') as f:
-            template = j2.Template(f.read())
-        text = template.render(header=lib.autogen_header, build=lib.build_dir)
-        with open(f"sylex.conf", 'w') as f:
-            f.write(text.replace("    ", "\t"))
-    # Also clone source into .sylex
-    os.makedirs(f"{lib.local_slx_dir}", exist_ok=True)
-    for mod in lib.py_files: #["lib", "error", "parse", "sylex", "expand"]:
-        with open(f"{lib.slx_dir}/{mod}.py", 'r') as f:
-            text = f.read()
-        with open(f"{lib.local_slx_dir}/{mod}.py", 'w') as f:
-            f.write(text)
-    os.makedirs(f"{lib.local_templ_dir}", exist_ok=True)
-    for templ in lib.j2_files: #["common.tex.mk", "Makefile", "build.tex.mk", "param.tex.mk", "deps.tex.mk", "texwatch"]:
-        with open(f"{lib.templ_dir}/{templ}.j2", 'r') as f:
-            text = f.read()
-        with open(f"{lib.local_templ_dir}/{templ}.j2", 'w') as f:
-            f.write(text)
-
+        lib.j2_render(
+            "sylex.conf",
+            "sylex.conf",
+            tabs=False,
+        )
+    # Then the main Makefile
+    lib.j2_render(
+        "Makefile",
+        "Makefile",
+        tabs=False,
+    )
 class ProjFile:
     def __init__(self, s):
         self.name = s
