@@ -1,0 +1,47 @@
+{{header}}
+
+override PY_SRC = \{#
+#}{% for file in py %}
+    {{file}} \{#
+#}{% endfor %}
+    #
+
+override J2_SRC = \{#
+#}{% for file in j2 %}
+    {{file}} \{#
+#}{% endfor %}
+    #
+
+override TEX_SRC_{{name}} = \{#
+#}{% for file in txt %}
+    {{file}} \{#
+#}{% endfor %}
+    #
+
+override TEX_FIG_{{name}} = \{#
+#}{% for file in fig %}
+    {{file}} \{#
+#}{% endfor %}
+    #
+
+override BIBLIO_{{name}} = \{#
+#}{% for file in bib %}
+    {{file}} \{#
+#}{% endfor %}
+    #
+
+override HEADERS_{{name}} = \{#
+#}{% for file in hdr %}
+    {{file}} \{#
+#}{% endfor %}
+    #
+
+override MAKES_{{name}} = \
+    {{build}}/build_{{name}}.tex.mk \
+    {{build}}/param_{{name}}.tex.mk \
+    {{build}}/deps_{{name}}.tex.mk \
+    {{build}}/common-tex.mk \
+    Makefile \
+    #
+
+
