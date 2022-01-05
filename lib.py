@@ -1,8 +1,6 @@
 # SyLeX
 #   Build descriptor for LaTeX
 
-import re
-import sys
 import os
 import shutil
 import jinja2 as j2
@@ -15,7 +13,7 @@ local_templ_dir = f"{local_slx_dir}/templates"
 build_dir = "build"
 
 py_files = ["error", "expand", "lib", "parse", "sylex"]
-j2_mk_files = ["common", "build", "param", "deps"]
+j2_mk_files = ["common", "pdf", "param", "deps"]
 j2_files = ["Makefile", "texwatch"] + [f + ".tex.mk" for f in j2_mk_files]
 
 date_modified = "2021-12-30"
@@ -104,7 +102,8 @@ class File:
         return os.path.isfile(self.path())
 
     def path(self):
-        return self.dir + "/" + self.name + "." + (self.ext or "tex")
+        p = self.dir + "/" + self.name + "." + (self.ext or "tex")
+        return p.replace("./", "")
 
     def name_of_path(self):
         return self.path().replace("/", "__").replace("__", "/", 1)

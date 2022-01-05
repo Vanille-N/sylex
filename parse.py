@@ -4,7 +4,6 @@
 import re
 import sys
 import os
-import jinja2 as j2
 
 from error import Err
 import lib
@@ -85,20 +84,21 @@ class Cfg:
         if item is not None:
             (file, tag, refs) = item
             self.refs[file] = refs
-            if tag == 'fig':
-                self.fig.append(file)
-            elif tag == 'bib':
-                self.bib.append(file)
-            elif tag == 'hdr':
-                self.hdr.append(file)
-            elif tag == 'txt':
-                self.txt.append(file)
-            else:
-                Err.report(
-                    kind="Unknown Tag",
-                    msg="'{}' should be in fig,bib,hdr,txt".format(tag),
-                    fatal=False,
-                )
+            match tag:
+                case 'fig':
+                    self.fig.append(file)
+                case 'bib':
+                    self.bib.append(file)
+                case 'hdr':
+                    self.hdr.append(file)
+                case 'txt':
+                    self.txt.append(file)
+                case _:
+                    Err.report(
+                        kind="Unknown Tag",
+                        msg="'{}' should be in fig,bib,hdr,txt".format(tag),
+                        fatal=False,
+                    )
 
     def read_path(self, line):
         # compute indentation depth
@@ -152,7 +152,7 @@ class Cfg:
             if "/../" in file or file.startswith("../") or file.endswith("/..") or file == "..":
                 Err.report(
                     kind="Directory Climbing",
-                    msg="using .. is discouraged",
+                    msg="using .. is discouraged, make do with $(PREV) instead",
                 )
                 return None
             if file == "":
@@ -185,7 +185,7 @@ class Cfg:
     def print(self, proj):
         # Build
         lib.j2_render(
-            "build.tex.mk",
+            "pdf.tex.mk",
             proj.dest_build,
             tabs=False,
             params={
@@ -193,8 +193,8 @@ class Cfg:
             },
         )
         # Parameters
-        into_build = lambda f: f.with_prefix("build").name_of_path()
-        into_pdf_build = lambda f: f.with_prefix("build").try_pdf().name_of_path()
+        into_build = lambda f: f.with_prefix(f"{lib.build_dir}").name_of_path()
+        into_pdf_build = lambda f: f.with_prefix(f"{lib.build_dir}").try_pdf().name_of_path()
         lib.j2_render(
             "param.tex.mk",
             proj.dest_param,
@@ -230,15 +230,22 @@ class Cfg:
             params={
                 'copy': [(
                     sources.with_prefix("src").path(),
-                    sources.with_prefix("build").name_of_path(),
+                    sources.with_prefix(f"{lib.build_dir}").name_of_path(),
                 ) for sources in self.txt + self.fig + self.bib + self.hdr],
-                'extra': [],
+                'extra': [
+                    (
+                        pre.with_prefix(f"{lib.build_dir}").name_of_path(),
+                        " ".join(
+                            p.with_prefix(f"{lib.build_dir}").name_of_path() for ps in graph[pre] for p in graph[ps]
+                        )
+                    ) for pre in graph if type(pre) == lib.File
+                ],
             },
         )
         with open(proj.dest_deps + ".bak", 'w') as f:
             for sources in self.txt + self.fig + self.bib + self.hdr:
                 f.write("{}: {}\n\tcp $< $@\n".format(
-                    sources.with_prefix("build").name_of_path(),
+                    sources.with_prefix(f"{lib.build_dir}").name_of_path(),
                     sources.with_prefix("src").path(),
                 ))
                 f.write("\t$(BUILDER) expand --file $@\n")
@@ -246,8 +253,8 @@ class Cfg:
                 post = graph[pre]
                 if type(pre) == lib.File:
                     f.write("{}: {}\n".format(
-                        pre.with_prefix("build").name_of_path(),
-                        " ".join(p.with_prefix("build").name_of_path() for ps in post for p in graph[ps]),
+                        pre.with_prefix(f"{lib.build_dir}").name_of_path(),
+                        " ".join(p.with_prefix(f"{lib.build_dir}").name_of_path() for ps in post for p in graph[ps]),
                     ))
             f.write("\n")
 
