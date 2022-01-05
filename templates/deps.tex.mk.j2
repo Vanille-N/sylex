@@ -2,10 +2,12 @@
 
 {% for src,dest in copy %}
 {{dest}}: {{src}}
-    cp $< $@
-    $(BUILDER) expand --file $@
+    $(BUILDER) expand --i $< --o $@ --features $(FEATURES)
+    #cp $< $@
+    #$(BUILDER) expand --file $@
+    #$(BUILDER) trim --file $@ --features $(FEATURES)
 {% endfor %}
 
 {% for pre,post in extra %}
-{{pre}}: {{post}}
+{{pre}}: {{post}} sylex.conf
 {% endfor %}

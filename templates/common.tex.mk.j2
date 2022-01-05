@@ -12,7 +12,7 @@ compile:
     make FILE=$$(basename $<) compile
 
 texwatch:
-    $(BUILDER) make --watcher
+    $(BUILDER) build-aux --watcher
 
 TARGET = all
 loop: texwatch

@@ -9,10 +9,11 @@ override {{group.label}}_{{name}} = \{#
 {% endfor %}
 
 override MAKES_{{name}} = \
-    {{build}}/build_{{name}}.tex.mk \
+    {{build}}/pdf_{{name}}.tex.mk \
     {{build}}/param_{{name}}.tex.mk \
     {{build}}/deps_{{name}}.tex.mk \
     {{build}}/common.tex.mk \
+    sylex.conf \
     Makefile \
     #
 

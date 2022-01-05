@@ -3,17 +3,17 @@
 TWICE = true
 
 include sylex.conf
-SPECS = $(DOC:%={{build}}/build_%.tex.mk)
+SPECS = $(DOC:%={{build}}/pdf_%.tex.mk)
 
 BUILDER = python3 .sylex/sylex.py
 
 all: $(SPECS) $(DOC:%=%.pdf)
 
 {{build}}/common.tex.mk:
-    $(BUILDER) make --common
+    $(BUILDER) build-aux --common
 
-{{build}}/build_%.tex.mk: cfg_%.slx
-    $(BUILDER) build --proj $* --level WARNING
+{{build}}/pdf_%.tex.mk: cfg_%.slx
+    $(BUILDER) build-conf --proj $* --level WARNING
 
 include {{build}}/common.tex.mk
 include $(SPECS)
