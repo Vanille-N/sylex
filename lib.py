@@ -33,6 +33,74 @@ autogen_header = f"""\
 # File generated: {now}
 """
 
+def verb_level(lv):
+    def wrapper(fn):
+        def inner(msg):
+            if Trace.lv() >= Trace.lv(lv):
+                print(fn().format(msg=msg))
+        return inner
+    return wrapper
+
+class Trace:
+    # Verbosities:
+    #   d      debug
+    #   i      info
+    #   p      path
+    #   n      none
+    verbose = 'd'
+
+    indent = 0
+
+    def lv(label=None):
+        if label is None: label = Trace.verbose
+        match label:
+            case 'n': return 0
+            case 'p': return 1
+            case 'i': return 2
+            case 'd': return 3
+            case _:
+                raise ArgumentError(label)
+
+    @verb_level('d')
+    def debug():
+        return '> {msg}'
+
+    @verb_level('i')
+    def info():
+        return '? {msg}'
+
+    colors = {
+        'RED': '\x1b[31m',
+        'GRN': '\x1b[32m',
+        'YLW': '\x1b[33m',
+        'BLU': '\x1b[34m',
+        'PPL': '\x1b[35m',
+        'WHT': '\x1b[0m',
+    }
+
+    def path(comment=None):
+        def wrapper(fn):
+            def inner(*args, **kwargs):
+                aux = (Trace.lv() >= Trace.lv('p'))
+                if aux:
+                    print("{indent}{GRN}{name}{WHT} {{".format(
+                        indent=' '*Trace.indent,
+                        name=fn.__name__,
+                        **Trace.colors,
+                    ))
+                    Trace.indent += 4
+                    if comment is not None:
+                        for line in comment.split('\n'):
+                            print(' ' * Trace.indent + line.format(*args, **kwargs,
+                                **Trace.colors))
+                res = fn(*args, **kwargs)
+                if aux:
+                    Trace.indent -= 4
+                    print(f"{' ' * Trace.indent}}}")
+                return res
+            return inner
+        return wrapper
+
 def is_filename(s):
     for c in s:
         if not (
@@ -43,6 +111,7 @@ def is_filename(s):
             return False
     return True
 
+@Trace.path('Render {BLU}{0}.j2{WHT} to {BLU}{1}{WHT}')
 def j2_render(src, dest, tabs=True, params={}):
     with open(f"{templ_dir}/{src}.j2", 'r') as f:
         template = j2.Template(f.read())
@@ -56,6 +125,7 @@ def j2_render(src, dest, tabs=True, params={}):
     with open(dest, 'w') as f:
         f.write(text)
 
+@Trace.path('Delete {BLU}{0}{WHT}')
 def rm_r(path):
     if not os.path.exists(path):
         return
@@ -64,6 +134,7 @@ def rm_r(path):
     else:
         shutil.rmtree(path)
 
+@Trace.path('Copy {BLU}{0}{WHT} to {BLU}{1}/{file}{WHT}')
 def copy_file(src, dest, file=None):
     src = os.path.abspath(src)
     dest = os.path.abspath(dest)

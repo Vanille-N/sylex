@@ -38,14 +38,17 @@ class Refs:
                     fatal=False,
                 )
 
+
     def union(self, other):
         u = Refs()
         u.induce = self.induce.union(other.induce)
         u.depend = self.depend.union(other.depend)
         return u
 
+
     def __str__(self):
         return "<({}) >({})".format(",".join(self.depend), ",".join(self.induce))
+
 
     def into_graph(refs):
         graph = {}
@@ -59,6 +62,7 @@ class Refs:
                 graph[d].append(file)
         return graph
 
+
 class Cfg:
     def __init__(self):
         self.txt = []
@@ -70,12 +74,14 @@ class Cfg:
         self.ref_stk = [Refs()]
         self.refs = {}
 
+
     def trim_comment(line):
         i = line.find("#")
         if i == -1:
             return line
         else:
             return line[:i]
+
 
     def push(self, line):
         line = Cfg.trim_comment(line)
@@ -99,6 +105,7 @@ class Cfg:
                         msg="'{}' should be in fig,bib,hdr,txt".format(tag),
                         fatal=False,
                     )
+
 
     def read_path(self, line):
         # compute indentation depth
@@ -182,88 +189,104 @@ class Cfg:
                     )
                 return (file, tag, refs)
 
+
+    @lib.Trace.path('Write configuration for {RED}{1.name}{WHT}')
     def print(self, proj):
         into_build = lambda f: f.with_prefix(f"{lib.build_dir}").name_of_path()
         into_pdf_build = lambda f: f.with_prefix(f"{lib.build_dir}").try_pdf().name_of_path()
-        # Build
-        lib.j2_render(
-            "pdf.tex.mk",
-            proj.dest_build,
-            tabs=False,
-            params={
-                'name': proj.name,
-                'figs': [{
-                    'real_name': fig.with_prefix("build").try_pdf().name_of_path(),
-                    'build_name': fig.without_ext().path(),
-                    'base_name': fig.try_pdf().filename(),
-                } for fig in self.fig],
-            },
-        )
-        # Parameters
-        lib.j2_render(
-            "param.tex.mk",
-            proj.dest_param,
-            tabs=False,
-            params={
-                'name': proj.name,
-                'groups': [{
-                    'label': 'TEX_SRC',
-                    'files': self.txt,
-                    'map': into_build,
-                },{
-                    'label': 'TEX_FIG',
-                    'files': self.fig,
-                    'map': into_pdf_build,
-                },{
-                    'label': 'BIBLIO',
-                    'files': self.bib,
-                    'map': into_build,
-                },{
-                    'label': 'HEADERS',
-                    'files': self.hdr,
-                    'map': into_build,
-                }],
-                'hasbib': (len(self.bib) > 0),
-            },
-        )
-        # Dependencies
-        graph = Refs.into_graph(self.refs)
-        lib.j2_render(
-            "deps.tex.mk",
-            proj.dest_deps,
-            tabs=False,
-            params={
-                'copy': [(
-                    sources.with_prefix("src").path(),
-                    sources.with_prefix(f"{lib.build_dir}").name_of_path(),
-                ) for sources in self.txt + self.fig + self.bib + self.hdr],
-                'extra': [
-                    (
-                        pre.with_prefix(f"{lib.build_dir}").name_of_path(),
-                        " ".join(
-                            p.with_prefix(f"{lib.build_dir}").name_of_path() for ps in graph[pre] for p in graph[ps]
-                        )
-                    ) for pre in graph if type(pre) == lib.File
-                ],
-            },
-        )
-        with open(proj.dest_deps + ".bak", 'w') as f:
-            for sources in self.txt + self.fig + self.bib + self.hdr:
-                f.write("{}: {}\n\tcp $< $@\n".format(
-                    sources.with_prefix(f"{lib.build_dir}").name_of_path(),
-                    sources.with_prefix("src").path(),
-                ))
-                f.write("\t$(BUILDER) expand --file $@\n")
-            for pre in graph:
-                post = graph[pre]
-                if type(pre) == lib.File:
-                    f.write("{}: {}\n".format(
-                        pre.with_prefix(f"{lib.build_dir}").name_of_path(),
-                        " ".join(p.with_prefix(f"{lib.build_dir}").name_of_path() for ps in post for p in graph[ps]),
+
+        @lib.Trace.path()
+        def print_pdf():
+            # PDF
+            lib.j2_render(
+                "pdf.tex.mk",
+                proj.dest_build,
+                tabs=False,
+                params={
+                    'name': proj.name,
+                    'figs': [{
+                        'real_name': fig.with_prefix("build").try_pdf().name_of_path(),
+                        'build_name': fig.without_ext().path(),
+                        'base_name': fig.try_pdf().filename(),
+                    } for fig in self.fig],
+                },
+            )
+        print_pdf()
+
+        @lib.Trace.path()
+        def print_parameters():
+            # Parameters
+            lib.j2_render(
+                "param.tex.mk",
+                proj.dest_param,
+                tabs=False,
+                params={
+                    'name': proj.name,
+                    'groups': [{
+                        'label': 'TEX_SRC',
+                        'files': self.txt,
+                        'map': into_build,
+                    },{
+                        'label': 'TEX_FIG',
+                        'files': self.fig,
+                        'map': into_pdf_build,
+                    },{
+                        'label': 'BIBLIO',
+                        'files': self.bib,
+                        'map': into_build,
+                    },{
+                        'label': 'HEADERS',
+                        'files': self.hdr,
+                        'map': into_build,
+                    }],
+                    'hasbib': (len(self.bib) > 0),
+                },
+            )
+        print_parameters()
+
+        @lib.Trace.path()
+        def print_dependencies():
+            # Dependencies
+            graph = Refs.into_graph(self.refs)
+            lib.j2_render(
+                "deps.tex.mk",
+                proj.dest_deps,
+                tabs=False,
+                params={
+                    'copy': [(
+                        sources.with_prefix("src").path(),
+                        sources.with_prefix(f"{lib.build_dir}").name_of_path(),
+                    ) for sources in self.txt + self.fig + self.bib + self.hdr],
+                    'extra': [
+                        (
+                            pre.with_prefix(f"{lib.build_dir}").name_of_path(),
+                            " ".join(
+                                p.with_prefix(f"{lib.build_dir}").name_of_path() for ps in graph[pre] for p in graph[ps]
+                            )
+                        ) for pre in graph if type(pre) == lib.File
+                    ],
+                },
+            )
+            with open(proj.dest_deps + ".bak", 'w') as f:
+                for sources in self.txt + self.fig + self.bib + self.hdr:
+                    f.write("{}: {}\n\tcp $< $@\n".format(
+                        sources.with_prefix(f"{lib.build_dir}").name_of_path(),
+                        sources.with_prefix("src").path(),
                     ))
-            f.write("\n")
+                    f.write("\t$(BUILDER) expand --file $@\n")
+                for pre in graph:
+                    post = graph[pre]
+                    if type(pre) == lib.File:
+                        f.write("{}: {}\n".format(
+                            pre.with_prefix(f"{lib.build_dir}").name_of_path(),
+                            " ".join(p.with_prefix(f"{lib.build_dir}").name_of_path() for ps in post for p in graph[ps]),
+                        ))
+                f.write("\n")
+        print_dependencies()
+
 
 # Read file f (in the texmk format) and return a workable descriptor
+@lib.Trace.path('Read configuration for {RED}{0.name}{WHT}\nfrom {BLU}{0.src}{WHT}')
 def parse_cfg(proj, fail):
     with open(proj.src, 'r') as f:
         Err.in_file(proj.src)

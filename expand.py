@@ -1,6 +1,8 @@
 from error import Err
 import re
+import lib
 
+@lib.Trace.path('Expand {BLU}{i}{WHT} to {BLU}{o}{WHT}\nwith features {features}')
 def expand(*, i, o, features):
     Err.in_file(i)
     with open(i, 'r') as f:
@@ -16,6 +18,7 @@ re_root = r"\$\(ROOT\)/"
 re_prev = r"\$\(PREV\)/"
 re_slash = re.compile(r"\\(input|includegraphics|include)")
 
+@lib.Trace.path('Resolve file paths')
 def filepaths(text, name):
     # Replace $(HERE) with the actual path
     file_root = name.replace("build/", "")
@@ -103,8 +106,8 @@ def structure(group):
     )
     return ('',[])
 
+@lib.Trace.path('Trim conditional compilation')
 def trim(text, features):
-    print("%%%%%%%%%%%%%%%%%%%%%%%%%")
     features = set(f for f in features)
     transformed = []
     cond_stack = []
@@ -167,7 +170,6 @@ def trim(text, features):
             kind="Unterminated conditional",
             msg=f"file ended with {len(cond_stack)} $(IF(...)) still open, consider adding $(ENDIF) where appropriate",
         )
-    print("%%%%%%%%%%%%%%%%%%%%%%%%%")
     return '\n'.join(transformed)
 
 

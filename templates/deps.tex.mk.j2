@@ -3,9 +3,6 @@
 {% for src,dest in copy %}
 {{dest}}: {{src}}
     $(BUILDER) expand --i $< --o $@ --features $(FEATURES)
-    #cp $< $@
-    #$(BUILDER) expand --file $@
-    #$(BUILDER) trim --file $@ --features $(FEATURES)
 {% endfor %}
 
 {% for pre,post in extra %}
