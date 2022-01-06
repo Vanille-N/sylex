@@ -18,10 +18,8 @@ all: $(SPECS) $(DOC:%=%.pdf)
 include {{build}}/common.tex.mk
 include $(SPECS)
 
-clean:
+clean: $(DOC:%=clean_%)
     rm -rf {{build}}
-    rm -f $(DOC:%=%.pdf)
-    rm -f texwatch
 
 TARGET = all
 force:

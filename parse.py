@@ -173,7 +173,7 @@ class Cfg:
                 assert len(self.ref_stk) == len(self.tag_stk)
                 return None
             else:
-                file = lib.File("".join(self.path_stk) + file)
+                file = lib.File("".join(self.path_stk) + file).try_ext("tex")
                 if not file.with_prefix("src").exists():
                     Err.report(
                         kind="Nonexistent File",
@@ -183,6 +183,8 @@ class Cfg:
                 return (file, tag, refs)
 
     def print(self, proj):
+        into_build = lambda f: f.with_prefix(f"{lib.build_dir}").name_of_path()
+        into_pdf_build = lambda f: f.with_prefix(f"{lib.build_dir}").try_pdf().name_of_path()
         # Build
         lib.j2_render(
             "pdf.tex.mk",
@@ -190,11 +192,14 @@ class Cfg:
             tabs=False,
             params={
                 'name': proj.name,
+                'figs': [{
+                    'real_name': fig.with_prefix("build").try_pdf().name_of_path(),
+                    'build_name': fig.without_ext().path(),
+                    'base_name': fig.try_pdf().filename(),
+                } for fig in self.fig],
             },
         )
         # Parameters
-        into_build = lambda f: f.with_prefix(f"{lib.build_dir}").name_of_path()
-        into_pdf_build = lambda f: f.with_prefix(f"{lib.build_dir}").try_pdf().name_of_path()
         lib.j2_render(
             "param.tex.mk",
             proj.dest_param,
@@ -270,6 +275,6 @@ def parse_cfg(proj, fail):
         if fail <= Err.fatality:
             return None
         else:
-            cfg.txt.append(lib.File(proj.name))
+            cfg.txt.append(lib.File(proj.name).with_ext("tex"))
             return cfg
 

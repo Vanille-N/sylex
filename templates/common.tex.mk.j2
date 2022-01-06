@@ -11,11 +11,11 @@ compile:
 {{build}}/%.pdf: {{build}}/%.tex
     make FILE=$$(basename $<) compile
 
-texwatch:
+{{build}}/texwatch:
     $(BUILDER) build-aux --watcher
 
 TARGET = all
-loop: texwatch
-    ./texwatch $(TARGET)
+loop: {{build}}/texwatch
+    ./{{build}}/texwatch $(TARGET)
 
 .PHONY: compile loop tar

@@ -17,9 +17,9 @@ import parse
 def print_texwatch():
     lib.j2_render(
         "texwatch",
-        "texwatch",
+        f"{lib.build_dir}/texwatch",
     )
-    os.chmod("texwatch", 0o755)
+    os.chmod(f"{lib.build_dir}/texwatch", 0o755)
 
 def print_common():
     os.makedirs(f"{lib.build_dir}", exist_ok=True)

@@ -98,11 +98,29 @@ class File:
         f.ext = ext
         return f
 
+    def try_ext(self, ext):
+        if self.ext is None:
+            return self.with_ext(ext)
+
+    def without_ext(self):
+        return self.with_ext(None)
+
+    def basename(self):
+        return self.name
+
+    def filename(self):
+        n = self.name
+        if self.ext is not None:
+            n += '.' + self.ext
+        return n
+
     def exists(self):
         return os.path.isfile(self.path())
 
     def path(self):
-        p = self.dir + "/" + self.name + "." + (self.ext or "tex")
+        p = self.dir + "/" + self.name
+        if self.ext != None:
+            p += "." + self.ext
         return p.replace("./", "")
 
     def name_of_path(self):

@@ -24,5 +24,15 @@ include {{build}}/deps_{{name}}.tex.mk
 {{name}}:
     make FILE={{name}}.tex compile
 
-.PHONY: {{name}}
+{% for fig in figs %}
+{{fig.build_name}}: {{fig.real_name}}
+    cp $< {{fig.base_name}}
+{% endfor %}
+
+clean_{{name}}:
+    rm -f {{name}}.pdf
+    rm -f {% for fig in figs %}{{fig.base_name}}{% endfor %}
+
+.PHONY: {{name}} \
+    {% for fig in figs %}{{fig.build_name}}{% endfor %}
 
