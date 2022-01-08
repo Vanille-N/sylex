@@ -2,7 +2,10 @@
 
 {% for src,dest in copy %}
 {{dest}}: {{src}}
-    $(BUILDER) expand --i $< --o $@ --features $(FEATURES)
+    $(BUILDER) expand \
+        --i $< \
+        --o $@ \
+        --features $(FEATURES)
 {% endfor %}
 
 {% for pre,post in extra %}

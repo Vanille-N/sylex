@@ -7,6 +7,7 @@ import os
 
 from error import Err
 import lib
+import log
 
 class Refs:
     def __init__(self, decl=[]):
@@ -48,6 +49,8 @@ class Refs:
 
     def __str__(self):
         return "<({}) >({})".format(",".join(self.depend), ",".join(self.induce))
+    def __repr__(self):
+        return self.__str__()
 
 
     def into_graph(refs):
@@ -190,12 +193,13 @@ class Cfg:
                 return (file, tag, refs)
 
 
-    @lib.Trace.path('Write configuration for {RED}{1.name}{WHT}')
+    @log.path('Write configuration for {RED}{1.name}{WHT}')
     def print(self, proj):
         into_build = lambda f: f.with_prefix(f"{lib.build_dir}").name_of_path()
         into_pdf_build = lambda f: f.with_prefix(f"{lib.build_dir}").try_pdf().name_of_path()
 
-        @lib.Trace.path()
+        @log.call
+        @log.path()
         def print_pdf():
             # PDF
             lib.j2_render(
@@ -211,9 +215,9 @@ class Cfg:
                     } for fig in self.fig],
                 },
             )
-        print_pdf()
 
-        @lib.Trace.path()
+        @log.call
+        @log.path()
         def print_parameters():
             # Parameters
             lib.j2_render(
@@ -242,11 +246,25 @@ class Cfg:
                     'hasbib': (len(self.bib) > 0),
                 },
             )
-        print_parameters()
 
-        @lib.Trace.path()
+        @log.call
+        @log.path()
         def print_dependencies():
             # Dependencies
+            for f in self.txt + self.bib + self.fig:
+                if len(self.refs[f].depend) > 0:
+                    Err.report(
+                        kind="Dependency to non-header",
+                        msg=f"'{f}' is not a header, having a dependency to it could be a mistake",
+                        fatal=False,
+                    )
+            for f in self.hdr:
+                if len(self.refs[f].induce) > 0:
+                    Err.report(
+                        kind="Dependency of header",
+                        msg=f"'{f}' is a header, yet it has dependencies",
+                        fatal=False,
+                    )
             graph = Refs.into_graph(self.refs)
             lib.j2_render(
                 "deps.tex.mk",
@@ -267,26 +285,25 @@ class Cfg:
                     ],
                 },
             )
-            with open(proj.dest_deps + ".bak", 'w') as f:
-                for sources in self.txt + self.fig + self.bib + self.hdr:
-                    f.write("{}: {}\n\tcp $< $@\n".format(
-                        sources.with_prefix(f"{lib.build_dir}").name_of_path(),
-                        sources.with_prefix("src").path(),
-                    ))
-                    f.write("\t$(BUILDER) expand --file $@\n")
-                for pre in graph:
-                    post = graph[pre]
-                    if type(pre) == lib.File:
-                        f.write("{}: {}\n".format(
-                            pre.with_prefix(f"{lib.build_dir}").name_of_path(),
-                            " ".join(p.with_prefix(f"{lib.build_dir}").name_of_path() for ps in post for p in graph[ps]),
-                        ))
-                f.write("\n")
-        print_dependencies()
+            #with open(proj.dest_deps + ".bak", 'w') as f:
+            #    for sources in self.txt + self.fig + self.bib + self.hdr:
+            #        f.write("{}: {}\n\tcp $< $@\n".format(
+            #            sources.with_prefix(f"{lib.build_dir}").name_of_path(),
+            #            sources.with_prefix("src").path(),
+            #        ))
+            #        f.write("\t$(BUILDER) expand --file $@\n")
+            #    for pre in graph:
+            #        post = graph[pre]
+            #        if type(pre) == lib.File:
+            #            f.write("{}: {}\n".format(
+            #                pre.with_prefix(f"{lib.build_dir}").name_of_path(),
+            #                " ".join(p.with_prefix(f"{lib.build_dir}").name_of_path() for ps in post for p in graph[ps]),
+            #            ))
+            #    f.write("\n")
 
 
 # Read file f (in the texmk format) and return a workable descriptor
-@lib.Trace.path('Read configuration for {RED}{0.name}{WHT}\nfrom {BLU}{0.src}{WHT}')
+@log.path('Read configuration for {RED}{0.name}{WHT}\nfrom {BLU}{0.src}{WHT}')
 def parse_cfg(proj, fail):
     with open(proj.src, 'r') as f:
         Err.in_file(proj.src)
@@ -298,6 +315,8 @@ def parse_cfg(proj, fail):
         if fail <= Err.fatality:
             return None
         else:
-            cfg.txt.append(lib.File(proj.name).with_ext("tex"))
+            root = lib.File(proj.name).with_ext("tex")
+            cfg.txt.append(root)
+            cfg.refs[root] = Refs()
             return cfg
 

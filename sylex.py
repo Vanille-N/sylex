@@ -11,16 +11,17 @@ from argparse import ArgumentParser
 
 from error import Err
 import lib
+import log
 import expand
 import parse
 
 
-@lib.Trace.path('Create directory {BLU}{0}{WHT}')
+@log.path('Create directory {BLU}{0}{WHT}')
 def mkdir(path):
     os.makedirs(path, exist_ok=True)
 
 
-@lib.Trace.path('Write watcher')
+@log.path('Write watcher')
 def print_texwatch():
     lib.j2_render(
         "texwatch",
@@ -29,7 +30,7 @@ def print_texwatch():
     os.chmod(f"{lib.build_dir}/texwatch", 0o755)
 
 
-@lib.Trace.path('Write common make definitions')
+@log.path('Write common make definitions')
 def print_common():
     mkdir(f"{lib.build_dir}")
     lib.j2_render(
@@ -39,20 +40,21 @@ def print_common():
     )
 
 
-@lib.Trace.path('Clone project locally')
+@log.path('Clone project locally')
 def print_init():
     if os.path.abspath(lib.local_slx_dir) == lib.slx_dir:
         print("Warning: sylex launched with `init` is attempting to override itself")
         print("Aborted")
         return
 
-    @lib.Trace.path()
+    @log.call
+    @log.path()
     def cleanup():
         lib.rm_r(f"{lib.build_dir}") 
-    cleanup()
 
     # First clone source into .sylex
-    @lib.Trace.path()
+    @log.call
+    @log.path()
     def clone_source():
         lib.rm_r(f"{lib.local_slx_dir}")
         mkdir(f"{lib.local_slx_dir}")
@@ -62,9 +64,9 @@ def print_init():
                 lib.local_slx_dir,
                 file=f"{mod}.py",
             )
-    clone_source()
 
-    @lib.Trace.path()
+    @log.call
+    @log.path()
     def clone_templates():
         mkdir(f"{lib.local_templ_dir}")
         for templ in lib.j2_files:
@@ -73,9 +75,9 @@ def print_init():
                 lib.local_templ_dir,
                 file=f"{templ}.j2",
             )
-    clone_templates()
 
-    @lib.Trace.path()
+    @log.call
+    @log.path()
     def clone_configuration():
         # _If it doesn't exist_, clone .conf
         if not os.path.exists("sylex.conf"):
@@ -90,7 +92,6 @@ def print_init():
             "Makefile",
             tabs=False,
         )
-    clone_configuration()
 
 
 class ProjFile:
@@ -186,16 +187,10 @@ with commands:
         parser.add_argument('--features', nargs='*', help='features to include', required=False,
                 default=set())
         res = parser.parse_args(args)
-        expand.expand(i=res.i, o=res.o or res.i, features=res.features)
-
-
-    #def trim(self, args):
-    #    parser = ArgumentParser(description='trim document according to features')
-    #    parser.add_argument('--file', help='file to expand')
-    #    parser.add_argument('--features', nargs='*', help='features to include')
-    #    res = parser.parse_args(args)
-    #    expand.trim(res.file, res.features)
-
+        if res.i.endswith("tex"):
+            expand.expand(i=res.i, o=res.o or res.i, features=expand.Features(res.features))
+        else:
+            lib.copy_file(res.i, res.o)
 
     def help(self, args):
         pass
