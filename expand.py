@@ -69,20 +69,66 @@ def parse_assert(cond, msg):
             msg=msg,
         )
 
-def check_arglen(cmd, length, construct):
-    parse_assert(len(cmd[1]) == length, f"Argument to {construct} should be of length {length}")
-
 
 class Args:
     def __init__(self):
         self.list = []
-    def __push__(self, arg):
+    def push(self, arg):
         self.list.append(arg)
 
+    def check_len(self, length, construct):
+        parse_assert(
+            len(self.list) == length,
+            f"Argument to {construct} should be of length {length}",
+        )
+    def __str__(self):
+        return ",".join(a.__str__() for a in self.list)
+
+
 class Cmd:
-    def __init__(self, fn, args):
+    def __init__(self, fn, args=None):
         self.fn = fn
-        self.args = args
+        self.args = args or Args()
+
+    def validate(self):
+        arity = {
+            'IF': 1,
+            'ELIF': 1,
+            'NOT': 2,
+            'TRUE': 0,
+            'FALSE': 0,
+            'ENDIF': 0,
+            'ELSE': 0,
+        }.get(self.fn) or 0
+        self.args.check_len(arity, self.fn)
+
+    def evaluate(self, features):
+        self.validate()
+        match self.fn:
+            case ("IF"|"ELIF"):
+                return self.args.list[0].evaluate(features)
+            case "NOT":
+                return not self.args.list[0].evaluate(features)
+            case "TRUE":
+                return True
+            case "FALSE":
+                return False
+            case other:
+                if other == other.lower():
+                    return features.query(other)
+                else:
+                    Err.report(
+                        kind="Unable to evaluate",
+                        msg=f"'{cmd.fn}' is not a known construct",
+                    )
+
+    def push(self, arg):
+        if arg is not None:
+            self.args.push(arg)
+
+    def __str__(self):
+        return f"{self.fn}({self.args})"
+
 
 def structure(string):
     fnames = {}
@@ -96,6 +142,8 @@ def structure(string):
                 tokens.append(running)
                 tokens.append(c)
                 running = ''
+            elif c == ' ':
+                pass
             else:
                 tokens.append(c)
         if running != '':
@@ -104,67 +152,45 @@ def structure(string):
     tokens = tokenize(string)[::-1]
     def parse():
         if len(tokens) == 0:
-            return ('', [])
+            return None
         match tokens[-1]:
             case '(':
-                name = ''
+                cmd = Cmd('')
             case ')':
                 return None
             case ',':
                 return None
             case other:
                 tokens.pop()
-                name = other
+                cmd = Cmd(other)
         if len(tokens) == 0:
-            return (name, [])
+            return cmd
         if tokens[-1] == '(':
             tokens.pop()
-            args = []
             while True:
                 match tokens.pop():
                     case ')':
-                        return (name, args)
+                        return cmd
                     case ',':
-                        args.append(parse())
+                        cmd.push(parse())
                     case other:
                         tokens.append(other)
-                        args.append(parse())
-        return (name, [])
+                        cmd.push(parse())
+        return cmd
     return parse()
+
 
 class Features:
     def __init__(self, lst):
         self.all = set(lst)
-
-    def evaluate(self, cmd):
-        match cmd[0]:
-            case ("IF"|"ELIF"):
-                check_arglen(cmd, 1, "IF/ELIF")
-                return self.evaluate(cmd[1][0])
-            case "NOT":
-                check_arglen(cmd, 1, "NOT")
-                return not self.evaluate(cmd[1][0])
-            case "TRUE":
-                check_arglen(cmd, 0, "TRUE")
-                return True
-            case "FALSE":
-                check_arglen(cmd, 0, "FALSE")
-                return False
-            case other:
-                if other == other.lower():
-                    check_arglen(cmd, 0, f"feature {other}")
-                    return (other in self.all)
-                else:
-                    Err.report(
-                        kind="Unable to evaluate",
-                        msg=f"'{cmd[0]}' is not a known construct",
-                    )
-
+ 
     def __str__(self):
         return ','.join(self.all)
     def __repr__(self):
         return self.__str__()
 
+    def query(self, f):
+        return (f in self.all)
 
     @log.path('Trim conditional compilation')
     def trim(self, text):
@@ -176,14 +202,14 @@ class Features:
             search = re_cond.search(line)
             if search:
                 cmd = structure(search.group(2))
-                match cmd[0]:
+                match cmd.fn:
                     case "IF":
-                        res = self.evaluate(cmd)
+                        res = cmd.evaluate(self)
                         cond_stack.append(Cond(res))
                         log.Logger.indent_inc()
-                        log.info(f"IF :: {cmd[1]} -> {cond_stack[-1]}")
+                        log.info(f"IF :: {cmd.args} -> {cond_stack[-1]}")
                     case  "ELIF":
-                        res = self.evaluate(cmd)
+                        res = cmd.evaluate(self)
                         if len(cond_stack) > 0:
                             if cond_stack[-1].has_else:
                                 Err.report(
@@ -199,7 +225,6 @@ class Features:
                             )
 
                     case "ENDIF":
-                        check_arglen(cmd, 0, "ENDIF")
                         if len(cond_stack) > 0:
                             cond_stack.pop()
                             log.info(f"ENDIF")
@@ -210,7 +235,6 @@ class Features:
                                 msg="$(ENDIF) provided without matching $(IF(...)) conditional",
                             )
                     case "ELSE":
-                        check_arglen(cmd, 0, "ENDIF")
                         if len(cond_stack) > 0:
                             if cond_stack[-1].has_else:
                                 Err.report(
