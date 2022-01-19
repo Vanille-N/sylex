@@ -2,9 +2,10 @@ from error import Err
 import re
 import log
 
-re_here = r"\$\(HERE\)/"
-re_root = r"\$\(ROOT\)/"
-re_prev = r"\$\(PREV\)/"
+re_replace = re.compile(r"\$\(.*\)/")
+re_here = re.compile(r"\$\(HERE\)/")
+re_root = re.compile(r"\$\(ROOT\)/")
+re_prev = re.compile(r"\$\(PREV([0-9]*)\)/")
 re_slash = re.compile(r"\\(input|includegraphics|include)")
 
 @log.path('Resolve file paths')
@@ -12,19 +13,39 @@ def filepaths(text, name):
     # Replace $(HERE) with the actual path
     file_root = name.replace("build/", "")
     split = file_root.split("__")
-    #prev = []
-    #while len(split) > 0:
-    #    split.pop()
-    #    prev.append("__".join(split))
-    if len(split) > 0: split.pop()
-    here = "__".join(split)
-    if len(split) > 0: split.pop()
-    prev = "__".join(split)
+    path = []
+    def get(lst, idx):
+        if idx < len(lst):
+            return lst[idx]
+        else:
+            return None
+    while len(split) > 0:
+        split.pop()
+        path.append("__".join(split) + "__" if len(split) > 0 else "")
+    here = get(path, 0) or ""
+    prev = get(path, 1) or ""
     root = ""
-    if here != "": here += "__"
-    text = re.sub(re_here, here, text)
-    text = re.sub(re_root, root, text)
-    text = re.sub(re_prev, prev, text)
+    # Expand relative paths
+    lines = text.split("\n")
+    text = []
+    for line in lines:
+        if re_replace.search(line) is not None:
+            line = re.sub(re_here, here, line)
+            line = re.sub(re_root, root, line)
+            while True:
+                g = re_prev.search(line)
+                print(line, g)
+                if g is not None:
+                    i = int(g.group(1) or 1)
+                    print(f"0:'{g.group(0)}' 1:'{g.group(1)}' i:'{i}'")
+                    print(line.find(g.group(0)))
+                    line = line.replace(g.group(0), get(path, i) or "")
+                    print(line)
+                else:
+                    break
+        text.append(line)
+
+    text = "\n".join(text)
     # Replace "/" with "__"
     # This is an overapproximation, since it will replace
     # all "/" in the same line as a input|includegraphics|include
@@ -84,6 +105,9 @@ class Args:
     def __str__(self):
         return ",".join(a.__str__() for a in self.list)
 
+    def nonempty(self):
+        return len(self.list) > 0
+
 
 class Cmd:
     def __init__(self, fn, args=None):
@@ -94,7 +118,7 @@ class Cmd:
         arity = {
             'IF': 1,
             'ELIF': 1,
-            'NOT': 2,
+            'NOT': 1,
             'TRUE': 0,
             'FALSE': 0,
             'ENDIF': 0,
@@ -127,7 +151,7 @@ class Cmd:
             self.args.push(arg)
 
     def __str__(self):
-        return f"{self.fn}({self.args})"
+        return f"{self.fn}" + (f"({self.args})" if self.args.nonempty() else "")
 
 
 def structure(string):
@@ -207,7 +231,7 @@ class Features:
                         res = cmd.evaluate(self)
                         cond_stack.append(Cond(res))
                         log.Logger.indent_inc()
-                        log.info(f"IF :: {cmd.args} -> {cond_stack[-1]}")
+                        log.info("{0} -> {YLW}{1}{WHT}", cmd, cond_stack[-1])
                     case  "ELIF":
                         res = cmd.evaluate(self)
                         if len(cond_stack) > 0:
@@ -217,7 +241,7 @@ class Features:
                                     msg="corresponding $(IF(...)) already has an $(ELSE), this $(ELIF(...)) is unreachable",
                                 )
                             cond_stack[-1].do_elif(res)
-                            log.info(f"ELIF :: {cmd[1]} -> {cond_stack[-1]}")
+                            log.info("{0} -> {YLW}{1}{WHT}", cmd, cond_stack[-1])
                         else:
                             Err.report(
                                 kind="Not in a conditional block",
@@ -227,7 +251,7 @@ class Features:
                     case "ENDIF":
                         if len(cond_stack) > 0:
                             cond_stack.pop()
-                            log.info(f"ENDIF")
+                            log.info("{0}", cmd)
                             log.Logger.indent_dec()
                         else:
                             Err.report(
@@ -242,7 +266,7 @@ class Features:
                                     msg="corresponding $(IF(...)) already has an $(ELSE), this $(ELSE) is unreachable",
                                 )
                             cond_stack[-1].do_else()
-                            log.info(f"ELSE -> {cond_stack[-1]}")
+                            log.info("{0} -> {YLW}{1}{WHT}", cmd, cond_stack[-1])
                         else:
                             Err.report(
                                 kind="Not in a conditional block",
@@ -267,7 +291,7 @@ class Features:
 
 
 
-@log.path('Expand {BLU}{i}{WHT}\nto {BLU}{o}{WHT}\nwith features {features}')
+@log.path('Expand {BLU}{i}{WHT}\nto {BLU}{o}{WHT}\nwith features {PPL}{features}{WHT}')
 def expand(*, i, o, features):
     Err.in_file(i)
     with open(i, 'r') as f:
