@@ -271,6 +271,7 @@ class Cfg:
                 proj.dest_deps,
                 tabs=False,
                 params={
+                    'name': proj.name,
                     'copy': [(
                         sources.with_prefix("src").path(),
                         sources.with_prefix(f"{lib.build_dir}").name_of_path(),

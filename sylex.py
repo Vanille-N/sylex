@@ -92,6 +92,12 @@ def print_init():
             "Makefile",
             tabs=False,
         )
+        if not os.path.exists(".gitignore"):
+            lib.j1_render(
+                "gitignore",
+                ".gitignore",
+                tabs=False,
+            )
 
 
 class ProjFile:

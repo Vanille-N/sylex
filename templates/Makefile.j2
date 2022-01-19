@@ -3,9 +3,9 @@
 TWICE = true
 
 include sylex.conf
-SPECS = $(DOC:%={{build}}/pdf_%.tex.mk)
+override SPECS = $(DOC:%={{build}}/pdf_%.tex.mk)
 
-BUILDER = python3 .sylex/sylex.py
+override BUILDER = python3 .sylex/sylex.py
 
 all: $(SPECS) $(DOC:%=%.pdf)
 

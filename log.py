@@ -69,12 +69,12 @@ class Trace:
 
 def verb_level(lv):
     def wrapper(fn):
-        def inner(msg):
+        def inner(msg, *args, **kwargs):
             if Trace.lv() >= Trace.lv(lv):
                 with Logger() as f:
                     fmt = fn()
                     for line in msg.split('\n'):
-                        f.write(fmt.format(msg=line))
+                        f.write(fmt.format(msg=line), *args, **kwargs)
         return inner
     return wrapper
 

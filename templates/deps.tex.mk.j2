@@ -1,11 +1,11 @@
 {{header}}
 
 {% for src,dest in copy %}
-{{dest}}: {{src}}
+{{dest}}: {{src}} sylex.conf
     $(BUILDER) expand \
         --i $< \
         --o $@ \
-        --features $(FEATURES)
+        --features $(FEATURES_{{name}})
 {% endfor %}
 
 {% for pre,post in extra %}
