@@ -72,20 +72,19 @@ def tree_of_tokens(tokens):
     st = toks.Stream(tokens)
     return parse_def_list(st)
 
+@toks.Stream.subproc
 def parse_def_list(st):
-    st.enter()
-    d = []
     while True:
         ok, res = parse_target(st)
         if ok:
-            d.append(res)
+            st.register(res)
             continue
         ok, res = parse_def(st)
         if ok:
-            d.append(res)
+            st.register(res)
         else: break
     if st.matches(toks.EOS):
-        return st.accept(DefList, d)
+        return st.accept(DefList)
     else:
         return st.forward(ok, res)
 
@@ -93,41 +92,39 @@ class DefList:
     def __init__(self, *args):
         print('DefList', *args)
 
+@toks.Stream.subproc
 def parse_def(st):
     #   '$' Ident '=' ItemList ';'
-    st.enter()
-    d = []
     if st.matches(Symbol.DECLARE):
         st.drop()
     else: return st.fail("A definition should begin with a '$'")
     if st.matches(Ident):
-        d.append(st.take())
+        st.take_register()
     else: return st.fail("No name given for definition")
     if st.matches(Symbol.EQUAL):
         st.drop()
     else: return st.fail("Expected an '=' sign following Def name")
     ok, res = parse_item_list(st)
     if ok:
-        d.append(res)
+        st.register(res)
     else: return st.fail("Parsing error in value", res)
     if st.matches(Symbol.SEMI):
         st.drop()
     else: return st.fail("Expected ';' at end of definition")
-    return st.accept(Def, d)
+    return st.accept(Def)
 
 class Target:
     def __init__(self, *args):
         print('Target', *args)
 
+@toks.Stream.subproc
 def parse_target(st):
     #   '(' Ident ')' ';'
-    st.enter()
-    d = []
     if st.matches(Symbol.OPENPAREN):
         st.drop()
     else: return st.fail("A target should start with '('")
     if st.matches(Ident):
-        d.append(st.take())
+        st.take_register()
     else: return st.fail("A target should have a name")
     if st.matches(Symbol.CLOSEPAREN):
         st.drop()
@@ -135,14 +132,13 @@ def parse_target(st):
     if st.matches(Symbol.SEMI):
         st.drop()
     else: return st.fail("Missing ';' terminator")
-    return st.accept(Target, d)
+    return st.accept(Target)
 
+@toks.Stream.subproc
 def parse_item_list(st):
     # Either
     #   '{' Item ',' ... '}'
     #   Item
-    st.enter()
-    d = []
     if st.matches(Symbol.OPENBRACE):
         st.drop()
         while True:
@@ -151,7 +147,7 @@ def parse_item_list(st):
                 break
             ok, res = parse_item(st)
             if ok:
-                d.append(res)
+                st.register(res)
             else: return st.fail("Error trying to read an item", res)
             if st.matches(Symbol.COMMA):
                 st.drop()
@@ -161,9 +157,10 @@ def parse_item_list(st):
             else: return st.fail("Unexpected token in list")
     else:
         ok, res = parse_item(st)
-        if ok: d.append(res)
+        if ok:
+            st.register(res)
         else: return st.fail("Parsing error in item", res)
-    return st.accept(ItemList, d)
+    return st.accept(ItemList)
 
 class Def:
     def __init__(self, *args):
@@ -181,47 +178,46 @@ class Expand:
     def __init__(self, *args):
         print('Expand', *args)
 
+@toks.Stream.subproc
 def parse_item(st):
     # Either
     #   Entry
     #   Entry '::' ItemList
-    st.enter()
-    d = []
     if st.matches(Symbol.DECLARE):
         st.drop()
         if st.matches(Ident):
-            d.append(st.take())
-            return st.accept(Expand, d)
+            st.take_register()
+            return st.accept(Expand)
         else: return st.fail("Expansion applies to an identifier")
     ok, res = parse_entry(st)
     if ok:
-        d.append(res)
+        st.register(res)
     else: return st.fail("Error while parsing entry", res)
     if st.matches(Symbol.SCOPE):
         st.drop()
         ok, res = parse_item_list(st)
         if ok:
-            d.append(res)
+            st.register(res)
         else: return st.fail("Error while parsing tail", res)
-    return st.accept(Item, d)
+    return st.accept(Item)
 
+@toks.Stream.subproc
 def parse_entry(st):
     #   Ident
     # Followed by 0 or more Tag
-    st.enter()
     d = []
     if st.matches(Ident):
-        d.append(st.take())
+        st.take_register()
     else: return st.fail("Item should have a name")
     while True:
         ok, res = parse_tag(st)
         if ok:
-            d.append(res)
+            st.register(res)
         elif ok is None:
             break
         else:
             return st.forward(ok, res)
-    return st.accept(Entry, d)
+    return st.accept(Entry)
 
 class Tag:
     def __init__(self, *args):
@@ -243,6 +239,7 @@ class Depend:
     def __init__(self, *args):
         print('Depend', *args)
 
+@toks.Stream.subproc
 def parse_tag(st):
     # Either
     #   ':'
@@ -252,8 +249,6 @@ def parse_tag(st):
     #   Ident
     # Optionally followed by
     #   '(' Ident ',' ... ')'
-    st.enter()
-    d = []
     if st.matches(Symbol.COLON):
         sym = Label
     elif st.matches(Symbol.LEFT):
@@ -262,23 +257,22 @@ def parse_tag(st):
         sym = Depend
     else: return st.abort("Not a valid tag")
     if st.matches(Ident):
-        d.append(st.take())
+        st.take_register()
     else: return st.fail("Tag should have a name")
     ok, res = parse_params(st)
     if ok:
-        d.append(res)
+        st.register(res)
     else:
         return st.forward(ok, res)
     st.drop()
-    return st.accept(sym, d)
+    return st.accept(sym)
 
 class Params:
     def __init__(self, *args):
         print('Params', *args)
 
+@toks.Stream.subproc
 def parse_params(st):
-    st.enter()
-    d = []
     if st.matches(Symbol.OPENPAREN):
         st.drop()
         while True:
@@ -286,7 +280,7 @@ def parse_params(st):
                 st.drop()
                 break
             if st.matches(Ident):
-                d.append(st.take())
+                st.take_register()
             else: return st.fail("Expected an identifier")
             if st.matches(Symbol.COMMA):
                 st.drop()
@@ -294,7 +288,7 @@ def parse_params(st):
                 st.drop()
                 break
             else: return st.fail("Unexpected token in parameters")
-    return st.accept(Params, d)
+    return st.accept(Params)
 
 with open("new-lang", 'r') as f:
     print(tree_of_tokens(tokens_of_chars(chars_of_text(f.read()))))

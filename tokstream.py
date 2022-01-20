@@ -81,6 +81,13 @@ class EOS:
 class Peek:
     pass
 
+class ParsingFailure(Exception):
+    def __init__(self, msg, peek, child=None):
+        self.msg = msg
+        self.peek = peek
+        self.child = child
+        super().__init__(msg)
+
 class Stream:
     def __init__(self, it):
         if len(it) == 0:
@@ -97,6 +104,7 @@ class Stream:
         self.head = 0
         self.save_start = []
         self.save_head = []
+        self.accum = []
 
     def enter(self):
         self.save_start.append(self.start)
@@ -109,6 +117,15 @@ class Stream:
     def commit(self):
         self.save_start.pop()
         self.save_head.pop()
+
+    def subproc(fn):
+        def inner(st):
+            st.enter()
+            st.accum.append([])
+            res = fn(st)
+            st.accum.pop()
+            return res
+        return inner
 
     def fail(self, msg, child=None):
         assert len(self.save_start) > 0
@@ -124,9 +141,9 @@ class Stream:
         print(f"Inner failure: {msg}")
         return (None, (msg, peek, child))
 
-    def accept(self, fn, args):
+    def accept(self, fn):
         self.commit()
-        return (True, Localized.map(fn, args))
+        return (True, Localized.map(fn, self.accum[-1]))
 
     def forward(self, ok, res):
         if ok:
@@ -168,6 +185,13 @@ class Stream:
         self.start = self.head
         print(res)
         return res
+
+    def take_register(self, fn=None):
+        res = self.take(fn)
+        self.accum[-1].append(res)
+
+    def register(self, arg):
+        self.accum[-1].append(arg)
 
     def drop(self):
         self.start = self.head
