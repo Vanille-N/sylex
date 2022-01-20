@@ -56,6 +56,23 @@ class Localized:
 
     def __str__(self):
         return f"[{self.data} @ {self.span}]"
+    def __repr__(self):
+        return self.__str__()
+
+    def map(fn, args):
+        if fn == None:
+            if len(args) == 1:
+                return args[0]
+            else:
+                fn = lambda *x: x
+        span = Span.bigcup(t.span for t in args)
+        data = fn(*[t.data for t in args])
+        res = Localized(span, data, args)
+        return res
+
+    def replace(self, val):
+        return Localized(self.span, val, self.sub)
+
 
 class EOS:
     def __str__(self):
@@ -78,6 +95,45 @@ class Stream:
                 self.toks[i] = Localized.unit(i, t)
         self.start = 0
         self.head = 0
+        self.save_start = []
+        self.save_head = []
+
+    def enter(self):
+        self.save_start.append(self.start)
+        self.save_head.append(self.head)
+
+    def rollback(self):
+        self.start = self.save_start.pop()
+        self.head = self.save_head.pop()
+
+    def commit(self):
+        self.save_start.pop()
+        self.save_head.pop()
+
+    def fail(self, msg, child=None):
+        assert len(self.save_start) > 0
+        peek = self.toks[self.save_start[-1]:self.head+1]
+        self.rollback()
+        print(f"Inner failure: {msg}")
+        return (False, (msg, peek, child))
+
+    def abort(self, msg, child=None):
+        assert len(self.save_start) > 0
+        peek = self.toks[self.save_start[-1]:self.head+1]
+        self.rollback()
+        print(f"Inner failure: {msg}")
+        return (None, (msg, peek, child))
+
+    def accept(self, fn, args):
+        self.commit()
+        return (True, Localized.map(fn, args))
+
+    def forward(self, ok, res):
+        if ok:
+            self.commit()
+        else:
+            self.rollback()
+        return (ok, res)
 
     def matches(self, *pats):
         if self.head + len(pats) > len(self.toks):
@@ -107,14 +163,12 @@ class Stream:
     def __str__(self):
         return "[" + ", ".join(f"{i}" for i in self.toks) + "]"
 
-    def take(self, fn):
-        sub = self.toks[self.start:self.head]
-        span = Span.bigcup(t.span for t in sub)
-        data = fn(*[t.data for t in sub])
-        res = Localized(span, data, sub)
+    def take(self, fn=None):
+        res = Localized.map(fn, self.toks[self.start:self.head])
         self.start = self.head
         print(res)
         return res
 
     def drop(self):
         self.start = self.head
+
