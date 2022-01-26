@@ -21,7 +21,7 @@ def read_conf(fname):
     tree = res
     print(tree)
     raise NotImplementedError()
-    ok, res = tree.lint()
+    ok, res = conf_of_tree(tree)
     if not ok:
         print(res)
         return None

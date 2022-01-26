@@ -48,7 +48,6 @@ def tokens_of_chars(chars):
             break
         else:
             raise NotImplementedError(",".join(f"{t}" for t in st.toks[st.head:]))
-            print(f"head: {st.head}")
     return l
 
 def tree_of_tokens(tokens):
@@ -59,7 +58,6 @@ def tree_of_tokens(tokens):
 def parse_def_list(st):
     latest = None
     while True:
-        print("AAAAAAAAAA", latest)
         try:
             res = parse_target(st)
             st.register(res)
@@ -96,18 +94,14 @@ def parse_def(st):
 @toks.Stream.subproc_exc
 def parse_target(st):
     #   '(' Ident ')' ';'
-    if st.matches(Phantom(ast.Symbol.OPENPAREN)):
-        st.take_register()
-    else: return st.fail("A target should start with '('")
-    if st.matches(ast.Ident):
-        st.take_register()
-    else: return st.fail("A target should have a name")
-    if st.matches(Phantom(ast.Symbol.CLOSEPAREN)):
-        st.take_register()
-    else: return st.fail("A target should end with ')'")
-    if st.matches(Phantom(ast.Symbol.SEMI)):
-        st.take_register()
-    else: return st.fail("Missing ';' terminator")
+    st.assert_matches(Phantom(ast.Symbol.OPENPAREN), failure="A target should start with '('")
+    st.take_register()
+    st.assert_matches(ast.Ident, failure="A target should have a name")
+    st.take_register()
+    st.assert_matches(Phantom(ast.Symbol.CLOSEPAREN), failure="A target should end with ')'")
+    st.take_register()
+    st.assert_matches(Phantom(ast.Symbol.SEMI), failure="Missing ';' terminator")
+    st.take_register()
     return st.accept(ast.Target)
 
 @toks.Stream.subproc_exc
@@ -121,10 +115,8 @@ def parse_item_list(st):
             if st.matches(Phantom(ast.Symbol.CLOSEBRACE)):
                 st.take_register()
                 break
-            ok, res = parse_item(st)
-            if ok:
-                st.register(res)
-            else: return st.fail("Error trying to read an item", res)
+            res = st.sub(parse_item, failure="Error trying to read an item")
+            st.register(res)
             if st.matches(Phantom(ast.Symbol.COMMA)):
                 st.take_register()
             elif st.matches(Phantom(ast.Symbol.CLOSEBRACE)):
@@ -132,53 +124,43 @@ def parse_item_list(st):
                 break
             else: return st.fail("Unexpected token in list")
     else:
-        ok, res = parse_item(st)
-        if ok:
-            st.register(res)
-        else: return st.fail("Parsing error in item", res)
+        res = st.sub(parse_item, failure="Parsing error in item")
+        st.register(res)
     return st.accept(ast.ItemList)
 
-@toks.Stream.subproc
+@toks.Stream.subproc_exc
 def parse_item(st):
     # Either
     #   Entry
     #   Entry '::' ItemList
     if st.matches(Phantom(ast.Symbol.DECLARE)):
         st.take_register()
-        if st.matches(ast.Ident):
-            st.take_register()
-            return st.accept(ast.Expand)
-        else: return st.fail("Expansion applies to an identifier")
-    ok, res = parse_entry(st)
-    if ok:
-        st.register(res)
-    else: return st.fail("Error while parsing entry", res)
+        st.assert_matches(ast.Ident, failure="Expansion applies to an identifier")
+        st.take_register()
+        return st.accept(ast.Expand)
+    res = st.sub(parse_entry, failure="Error while parsing entry")
+    st.register(res)
     if st.matches(Phantom(ast.Symbol.SCOPE)):
         st.take_register()
-        try:
-            res = parse_item_list(st)
-            st.register(res)
-        except ParsingFailure as res:
-            return st.fail(res.msg, res.peek, res.child)
+        res = st.sub(parse_item_list, failure=None)
+        st.register(res)
     return st.accept(ast.Item)
 
-@toks.Stream.subproc
+@toks.Stream.subproc_exc
 def parse_entry(st):
     #   Ident
     # Followed by 0 or more Tag
-    d = []
-    if st.matches(ast.Ident):
-        st.take_register()
-    else: return st.fail("Item should have a name")
+    st.assert_matches(ast.Ident, failure="Item should have a name")
+    st.take_register()
     while True:
-        ok, res = parse_tag(st)
-        if ok:
+        try:
+            res = st.sub(parse_tag, failure=None)
             st.register(res)
-        else:
+        except toks.ParsingFailure:
             break
     return st.accept(ast.Entry)
 
-@toks.Stream.subproc
+@toks.Stream.subproc_exc
 def parse_tag(st):
     # Either
     #   ':'
@@ -196,18 +178,13 @@ def parse_tag(st):
         sym = ast.Depend
     else: return st.fail("Not a valid tag")
     st.take_register()
-    if st.matches(ast.Ident):
-        st.take_register()
-    else: return st.fail("Tag should have a name")
-    ok, res = parse_params(st)
-    if ok:
-        st.register(res)
-    else:
-        return st.fail(res.msg, res.peek, res.child)
-    #st.take_register()
+    st.assert_matches(ast.Ident, failure="Tag should have a name")
+    st.take_register()
+    res = st.sub(parse_params, failure=None)
+    st.register(res)
     return st.accept(sym)
 
-@toks.Stream.subproc
+@toks.Stream.subproc_exc
 def parse_params(st):
     if st.matches(Phantom(ast.Symbol.OPENPAREN)):
         st.take_register()
@@ -215,9 +192,8 @@ def parse_params(st):
             if st.matches(Phantom(ast.Symbol.CLOSEPAREN)):
                 st.take_register()
                 break
-            if st.matches(ast.Ident):
-                st.take_register()
-            else: return st.fail("Expected an identifier")
+            st.assert_matches(ast.Ident, failure="Expected an identifier")
+            st.take_register()
             if st.matches(Phantom(ast.Symbol.COMMA)):
                 st.take_register()
             elif st.matches(Phantom(ast.Symbol.CLOSEPAREN)):

@@ -75,8 +75,8 @@ class Localized:
             else:
                 fn = lambda *x: x
         span = Span.bigcup(t.span for t in args)
-        print(args)
-        print([a for a in args if type(a) != Phantom])
+        #print(args)
+        #print([a for a in args if type(a) != Phantom])
         data = fn(*[a for a in args if type(a) != Phantom])
         res = Localized(span, data, args)
         return res
@@ -210,19 +210,21 @@ class Stream:
             self.fail(failure)
 
     def sub(self, fn, failure):
-        try:
+        if failure is not None:
+            try:
+                return fn(self)
+            except ParsingFailure as e:
+                self.fail(failure, e)
+        else:
             return fn(self)
-        except ParsingFailure as e:
-            self.fail(failure, e)
 
     def __str__(self):
-        return "[" + ", ".join(f"{i}" for i in self.toks) + "]"
+        return "[" + ", ".join(map(str, self.toks)) + "]"
 
     def take(self, fn=None):
         res = Localized.map(fn, self.select)
         self.start = self.head
         self.select = []
-        print(res)
         return res
 
     def take_register(self, fn=None):
