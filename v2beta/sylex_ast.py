@@ -1,9 +1,9 @@
 from enum import Enum
-import typing as ty
+from typing import TypeVar, Union, Optional, Sequence
 from dataclasses import dataclass
 
-T = ty.TypeVar("T")
-U = ty.TypeVar("U")
+T = TypeVar("T")
+U = TypeVar("U")
 
 from libparse import Loc, Span, Spanned
 
@@ -16,6 +16,8 @@ class Symbol(Enum):
     CLOSEBRACE = '}'
     OPENPAREN = '('
     CLOSEPAREN = ')'
+    OPENBRACK = '['
+    CLOSEBRACK = ']'
     EQUAL = '='
     RIGHT = '->'
     LEFT = '<-'
@@ -39,11 +41,11 @@ class Ident:
         return Ident(span.with_data(string))
 
     def __str__(self):
-        return f"'{self.name}'"
+        return f"Ident({self.name})"
 
 @dataclass
 class DefList:
-    defs: list[Spanned[ty.Union['Def', 'Target']]]
+    defs: Sequence[Spanned[Union['Def', 'Target']]]
 
     def __str__(self):
         return "DefList {\n" + '\n'.join(indent(f"{d}") for d in self.defs) + "\n}"
@@ -65,7 +67,7 @@ class Def:
 
 @dataclass
 class ItemList:
-    items: list[Spanned['Item']]
+    items: Sequence[Spanned['Item']|Spanned['Expand']]
 
     def __str__(self):
         return "ItemList {\n" + '\n'.join(indent(i.__str__()) for i in self.items) + "\n}"
@@ -73,7 +75,7 @@ class ItemList:
 @dataclass
 class Item:
     entry: Spanned['Entry']
-    tail: ty.Optional[Spanned[ItemList]]
+    tail: Optional[Spanned[ItemList]]
 
     def __str__(self):
         if self.tail is None:
@@ -88,13 +90,7 @@ class Expand:
     def __str__(self):
         return f"Expand({self.name})"
 
-@dataclass
-class Tag:
-    name: Spanned[Ident]
-    params: Spanned['Params']
-
-    def __str__(self):
-        return f"Tag({self.name}:{','.join(p.__str__() for p in self.params)})"
+Tag = Union['Label', 'Induce', 'Depend']
 
 @dataclass
 class Entry:
@@ -103,16 +99,23 @@ class Entry:
     induce: list[Spanned['Induce']]
     depend: list[Spanned['Depend']]
 
-    def extend(self, markers: list[ty.Union[Spanned['Label'], Spanned['Induce'], Spanned['Depend']]]):
-        for mk in markers:
-            if isinstance(mk.data, Induce): self.induce.append(mk)
-            elif isinstance(mk.data, Label): self.labels.append(mk)
-            elif isinstance(mk.data, Depend): self.depend.append(mk)
-            else: raise TypeError(f"{mk} of type {type(mk)} is not a valid entry marker")
+    @staticmethod
+    def from_name(name: Spanned[Ident]) -> 'Entry':
+        return Entry(name, [], [], [])
+
+    def push(self, mk: Spanned['Tag']):
+        if isinstance(mk.data, Induce):
+            self.induce.append(mk.span.with_data(mk.data))
+        elif isinstance(mk.data, Label):
+            self.labels.append(mk.span.with_data(mk.data))
+        elif isinstance(mk.data, Depend):
+            self.depend.append(mk.span.with_data(mk.data))
+        else:
+            raise TypeError(f"{mk} of type {type(mk)} is not a valid entry marker")
 
     def __str__(self):
         s = f"Entry({self.name})"
-        for m in self.label + self.induce + self.depend:
+        for m in self.labels + self.induce + self.depend:
             s += '\n' + indent(f"{m}")
         return s
 

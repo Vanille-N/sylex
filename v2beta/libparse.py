@@ -1,12 +1,12 @@
 from dataclasses import dataclass
-import typing as ty
+from typing import Union, Optional, TypeVar, Generic, Any, Callable
 
-T = ty.TypeVar("T")
-U = ty.TypeVar("U")
-V = ty.TypeVar("V")
-TCo = ty.TypeVar("TCo", covariant=True)
-UCo = ty.TypeVar("UCo", covariant=True)
-VCo = ty.TypeVar("VCo", covariant=True)
+T = TypeVar("T")
+U = TypeVar("U")
+V = TypeVar("V")
+TCo = TypeVar("TCo", covariant=True)
+UCo = TypeVar("UCo", covariant=True)
+VCo = TypeVar("VCo", covariant=True)
 
 
 @dataclass
@@ -17,6 +17,7 @@ class Loc:
     @staticmethod
     def max() -> 'Loc':
         return Loc(1_000_000, 1_000_000)
+
     @staticmethod
     def min() -> 'Loc':
         return Loc(-1, -1)
@@ -36,6 +37,12 @@ class Loc:
 
     def __lt__(self, other: 'Loc'): return self.cmp(other) < 0
     def __le__(self, other: 'Loc'): return self.cmp(other) <= 0
+    def __gt__(self, other: 'Loc'): return self.cmp(other) > 0
+    def __ge__(self, other: 'Loc'): return self.cmp(other) >= 0
+
+    def __str__(self):
+        return f"{self.line}:{self.col}"
+
 
 @dataclass
 class Span:
@@ -53,7 +60,7 @@ class Span:
     def with_data(self, data: T) -> 'Spanned[T]':
         return Spanned(data, self)
 
-    def extend(self, other: ty.Union[ty.Optional[Loc], ty.Optional['Span']]) -> 'Span':
+    def until(self, other: Optional[Union[Loc,'Span']]) -> 'Span':
         if other is None:
             return self
         elif isinstance(other, Loc):
@@ -61,24 +68,32 @@ class Span:
         else:
             return Span(min(other.start, self.start), max(other.end, self.end))
 
+    def __str__(self):
+        return f"({self.start}..{self.end})"
+
+
 @dataclass
-class Spanned(ty.Generic[TCo]):
+class Spanned(Generic[TCo]):
     data: TCo
     span: Span
 
     @staticmethod
-    def union(lst: list['Spanned[ty.Any]']) -> Span:
+    def union(lst: list['Spanned[Any]']) -> Span:
         span = Span.empty()
         if len(lst) > 0:
             span.start = min(span.start, lst[0].span.start)
             span.end = max(span.end, lst[-1].span.end)
         return span
 
-    def map(self: 'Spanned[TCo]', fn: ty.Callable[[TCo], U]) -> 'Spanned[U]':
+    def map(self: 'Spanned[TCo]', fn: Callable[[TCo], U]) -> 'Spanned[U]':
         return Spanned(fn(self.data), self.span)
 
+    def __str__(self):
+        return f"({self.span.start}@ {self.data} @{self.span.end})"
+
+
 @dataclass
-class Stream(ty.Generic[T]):
+class Stream(Generic[T]):
     data: list[Spanned[T]]
 
     @staticmethod
@@ -88,7 +103,7 @@ class Stream(ty.Generic[T]):
     def append(self, data: Spanned[T]):
         self.data.append(data)
 
-    def peek(self, idx: int) -> ty.Optional[Spanned[T]]:
+    def peek(self, idx: int) -> Optional[Spanned[T]]:
         if idx < len(self.data):
             return self.data[idx]
         else:
@@ -97,23 +112,29 @@ class Stream(ty.Generic[T]):
     def __getitem__(self, idx: slice):
         return self.data[idx]
 
+
 @dataclass
 class Error:
     kind: str
     msg: str
-    span: ty.Optional[Span]
+    span: Optional[Span]
+
 
 @dataclass
-class Wrong(ty.Generic[TCo]):
+class Wrong(Generic[TCo]):
     inner: TCo
+
 
 class Unreachable(Exception):
     pass
 
-Result = ty.Union[UCo, Wrong[VCo]]
+
+Result = Union[UCo, Wrong[VCo]]
+SpanResult = Result[Spanned[UCo], VCo]
+
 
 @dataclass
-class Maybe(ty.Generic[UCo]):
+class Maybe(Generic[UCo]):
     data: UCo
     diagnostic: Error
 # What's the use-case of Maybe, you may ask ?
@@ -131,63 +152,64 @@ class Maybe(ty.Generic[UCo]):
 # instead of
 #                       ^ expected ]
 
+
 @dataclass
-class Head(ty.Generic[T]):
-    stream: Stream[T]
-    cursor: int
+class Head(Generic[T]):
+    _stream: Stream[T]
+    _cursor: int
 
     @staticmethod
     def start(stream: Stream[T]) -> 'Head[T]':
         return Head(stream, 0)
 
     def bump(self, nb: int = 1):
-        self.cursor += 1
+        self._cursor += 1
 
-    def peek_absolute(self, idx: int):
-        return self.stream.peek(idx)
+    def _peek_absolute(self, idx: int) -> Optional[Spanned[T]]:
+        return self._stream.peek(idx)
 
-    def peek(self, nb: int = 0):
-        return self.peek_absolute(self.cursor + nb)
+    def peek(self, nb: int = 0) -> Optional[Spanned[T]]:
+        return self._peek_absolute(self._cursor + nb)
 
     def clone(self) -> 'Head[T]':
-        return Head(self.stream, self.cursor)
+        return Head(self._stream, self._cursor)
 
     def commit(self, other: 'Head[T]'):
-        self.cursor = other.cursor
+        self._cursor = other._cursor
 
-    def until(self, idx: ty.Union[int, 'Head[T]']) -> Span:
-        if isinstance(idx, Head):
-            idx = idx.cursor
+    def until(self, other: Union[int, 'Head[T]', Span, None]) -> Span:
+        if other is None:
+            span = Span.empty()
+        elif isinstance(other, Head):
+            span = self._span_absolute(other._cursor)
+        elif isinstance(other, Span):
+            span = other
         else:
-            idx = self.cursor + idx
-        return (self.span() or Span.empty()).extend(self.span_absolute(idx))
+            span = self._span_absolute(self.cursor + other)
+        return (self.span() or Span.empty()).until(span)
 
-    def sub(self, fn: ty.Callable[['Head[T]'], ty.Union[U, Wrong[V]]]) -> ty.Union[Spanned[U], Wrong[V]]:
-        start = self.cursor
+    def sub(self, fn: Callable[['Head[T]'], Result[U, V]]) -> SpanResult[U, V]:
+        print(f"enter {fn.__name__}")
+        start = self._cursor
         res = fn(self)
-        end = self.cursor
+        end = self._cursor
+        print(f"function {fn.__name__}\n\tread {res}\n\tbetween {start} and {end}")
         if isinstance(res, Wrong):
             self.cursor = start
             return res
         else:
-            return Spanned.union(self.stream[start:end]).with_data(res)
+            return Spanned.union(self._stream[start:end]).with_data(res)
 
-    def span_absolute(self, idx: int) -> ty.Optional[Span]:
-        pk = self.peek_absolute(idx)
+    def _span_absolute(self, idx: int) -> Span:
+        pk = self._peek_absolute(idx)
         if pk is None:
-            return None
+            return Span(Loc.max(), Loc.max())
         return pk.span
 
-    def span(self, idx: int = 0) -> ty.Optional[Span]:
-        return self.span_absolute(self.cursor + idx)
+    def span(self, idx: int = 0) -> Span:
+        return self._span_absolute(self._cursor + idx)
 
-    def err(self, kind: str, msg: str, span: Span = None) -> Wrong[Error]:
-        return Wrong(Error(kind, msg, span))
-
-    def current(self) -> int:
-        return self.cursor
-    def restore(self, idx: int):
-        self.cursor = idx
-
+    def err(self, kind: str, msg: str, span) -> Wrong[Error]:
+        return Wrong(Error(kind, msg, self.until(span)))
 
 
