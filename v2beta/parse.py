@@ -21,10 +21,10 @@ Tokens = lib.Stream[Token]
 class EOF:
     pass
 
-def next_token(hd: lib.Head[str]) -> ty.Union[lib.Error, Token, EOF, None]:
+def next_token(hd: lib.Head[str]) -> lib.Result[Token, ty.Union[lib.Error, EOF, None]]:
     read = hd.peek()
     if read is None:
-        return EOF()
+        return lib.Wrong(EOF())
     if read.data == '<':
         hd.bump()
         read = hd.peek()
@@ -36,12 +36,12 @@ def next_token(hd: lib.Head[str]) -> ty.Union[lib.Error, Token, EOF, None]:
         while True:
             read = hd.peek()
             if read is None:
-                return EOF()
+                return lib.Wrong(EOF())
             if read.data == '\n':
-                return None
+                return lib.Wrong(None)
             hd.bump()
     if read.data in [' ', '\n', '\t']:
-        return None
+        return lib.Wrong(None)
     if read.data == ':':
         read = hd.peek(1)
         print("Colon ? ", hd.peek(), hd.peek(1))
@@ -89,31 +89,69 @@ def next_token(hd: lib.Head[str]) -> ty.Union[lib.Error, Token, EOF, None]:
     raise NotImplementedError(hd.peek())
 
 
-def tokens_of_chars(chars: Chars) -> lib.Result[Tokens]:
+def tokens_of_chars(chars: Chars) -> lib.Result[Tokens, lib.Error]:
     toks: Tokens = lib.Stream.empty()
     hd = lib.Head.start(chars)
     while True:
         fwd = hd.clone()
         print(f"Enter: {fwd.peek()}")
-        res = next_token(fwd)
+        res: lib.Result[Token, lib.Error|EOF|None] = next_token(fwd)
         print(f"Exit: {fwd.peek()}")
         print(f"With: {res}")
         print()
-        if isinstance(res, EOF):
-            break
-        elif isinstance(res, lib.Error):
-            if res.span is None:
-                res.span = hd.until(fwd)
-                print(hd.span(), fwd.span(), hd.until(fwd))
-            return res
+        if isinstance(res, lib.Wrong):
+            if isinstance(res.inner, EOF):
+                break
+            elif res.inner is None:
+                fwd.bump()
+                hd.commit(fwd)
+                continue
+            else:
+                inner = res.inner
+                assert isinstance(inner, lib.Error)
+                if inner.span is None:
+                    inner.span = hd.until(fwd)
+                    print(hd.span(), fwd.span(), hd.until(fwd))
+                return lib.Wrong(inner)
         else:
-            if res is not None:
-                spanned = hd.until(fwd).with_data(res)
-                toks.append(spanned)
+            spanned = hd.until(fwd).with_data(res)
+            toks.append(spanned)
             fwd.bump()
             hd.commit(fwd)
     return toks
 
+def ast_of_tokens(tokens: Tokens) -> lib.Result[lib.Spanned[ast.DefList], lib.Error]:
+    hd = lib.Head.start(tokens)
+    res: lib.Result[lib.Spanned[lib.Maybe[ast.DefList]], lib.Error] = hd.sub(parse_deflist)
+    if isinstance(res, lib.Wrong):
+        return res
+    else:
+        assert isinstance(res.data, lib.Maybe)
+        if hd.peek() is None: # reached EOF as expected
+            return res.map(lambda x: x.data)
+        else:
+            return lib.Wrong(res.data.diagnostic)
+
+def parse_deflist(hd: lib.Head[Token]) -> lib.Result[lib.Maybe[ast.DefList], lib.Error]:
+    defs: list[ast.Spanned[ast.Def|ast.Target]] = []
+    err = lib.Error("None", "nothing", None)
+    while True:
+        read = hd.peek()
+        if read is None:
+            break
+        elif read.data == ast.Symbol.DECLARE:
+            item_def: lib.Result[lib.Spanned[ast.Def], lib.Error] = hd.sub(parse_def)
+            raise NotImplementedError("Handle Def")
+        elif read.data == ast.Symbol.OPENPAREN:
+            item_target: lib.Result[lib.Spanned[ast.Target], lib.Error] = hd.sub(parse_target)
+            raise NotImplementedError("Handle Target")
+    return lib.Maybe(ast.DefList(defs), err)
+
+def parse_def(hd: lib.Head[Token]) -> lib.Result[ast.Def, lib.Error]:
+    pass
+
+def parse_target(hd: lib.Head[Token]) -> lib.Result[ast.Target, lib.Error]:
+    pass
 
 def main():
     with open("../new-lang") as f:
@@ -125,6 +163,12 @@ def main():
         print(toks)
         return
     print('\n'.join(map(str, toks)))
+    print("="*15)
+    ast = ast_of_tokens(toks)
+    if isinstance(ast, lib.Error):
+        print(ast)
+        return
+    print(ast)
 
 if __name__ == "__main__":
     main()

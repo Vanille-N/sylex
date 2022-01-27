@@ -3,6 +3,11 @@ import typing as ty
 
 T = ty.TypeVar("T")
 U = ty.TypeVar("U")
+V = ty.TypeVar("V")
+TCo = ty.TypeVar("TCo", covariant=True)
+UCo = ty.TypeVar("UCo", covariant=True)
+VCo = ty.TypeVar("VCo", covariant=True)
+
 
 @dataclass
 class Loc:
@@ -57,8 +62,8 @@ class Span:
             return Span(min(other.start, self.start), max(other.end, self.end))
 
 @dataclass
-class Spanned(ty.Generic[T]):
-    data: T
+class Spanned(ty.Generic[TCo]):
+    data: TCo
     span: Span
 
     @staticmethod
@@ -69,7 +74,7 @@ class Spanned(ty.Generic[T]):
             span.end = max(span.end, lst[-1].span.end)
         return span
 
-    def map(self: 'Spanned[T]', fn: ty.Callable[[T], U]) -> 'Spanned[U]':
+    def map(self: 'Spanned[TCo]', fn: ty.Callable[[TCo], U]) -> 'Spanned[U]':
         return Spanned(fn(self.data), self.span)
 
 @dataclass
@@ -98,7 +103,33 @@ class Error:
     msg: str
     span: ty.Optional[Span]
 
-Result = ty.Union[U, Error]
+@dataclass
+class Wrong(ty.Generic[TCo]):
+    inner: TCo
+
+class Unreachable(Exception):
+    pass
+
+Result = ty.Union[UCo, Wrong[VCo]]
+
+@dataclass
+class Maybe(ty.Generic[UCo]):
+    data: UCo
+    diagnostic: Error
+# What's the use-case of Maybe, you may ask ?
+# Consider the grammar a?b
+# If you reab cb then a? matches nothing and b fails to read c
+# The reported error is "found c when b was expected"
+# but the actual diagnostic should be "found c when _a_ was expected"
+# Thus Maybe[U] is a way of saying "This is as far as I can parse U,
+# but if an error were to occur immediately afterwards, blame it on U not
+# on what comes after"
+# This also holds for lists:
+#     [ element, element, elem ]
+# should be reported as
+#                         ^^^^ unterminated 'element'
+# instead of
+#                       ^ expected ]
 
 @dataclass
 class Head(ty.Generic[T]):
@@ -131,11 +162,11 @@ class Head(ty.Generic[T]):
             idx = self.cursor + idx
         return (self.span() or Span.empty()).extend(self.span_absolute(idx))
 
-    def sub(self, fn: ty.Callable[['Head[T]'], Result[U]]) -> Result[Spanned[U]]:
+    def sub(self, fn: ty.Callable[['Head[T]'], ty.Union[U, Wrong[V]]]) -> ty.Union[Spanned[U], Wrong[V]]:
         start = self.cursor
         res = fn(self)
         end = self.cursor
-        if isinstance(res, Error):
+        if isinstance(res, Wrong):
             self.cursor = start
             return res
         else:
@@ -150,8 +181,8 @@ class Head(ty.Generic[T]):
     def span(self, idx: int = 0) -> ty.Optional[Span]:
         return self.span_absolute(self.cursor + idx)
 
-    def err(self, kind: str, msg: str, span: Span = None) -> Error:
-        return Error(kind, msg, span)
+    def err(self, kind: str, msg: str, span: Span = None) -> Wrong[Error]:
+        return Wrong(Error(kind, msg, span))
 
     def current(self) -> int:
         return self.cursor

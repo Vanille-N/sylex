@@ -43,7 +43,7 @@ class Ident:
 
 @dataclass
 class DefList:
-    defs: list[Spanned['Def']]
+    defs: list[Spanned[ty.Union['Def', 'Target']]]
 
     def __str__(self):
         return "DefList {\n" + '\n'.join(indent(f"{d}") for d in self.defs) + "\n}"
