@@ -28,12 +28,10 @@ def next_token(hd: lib.Head[str]) -> ty.Union[lib.Error, Token, EOF, None]:
     if read.data == '<':
         hd.bump()
         read = hd.peek()
-        if read is None:
-            return hd.err("Unknown token", "'<' unterminated, expected '-' after")
-        if read.data == '-':
+        if read is not None and read.data == '-':
             return ast.Symbol.LEFT
         else:
-            return hd.err("Unknown token", "'<' should be followed by '-'")
+            return hd.err("Unknown token", "'<' unterminated, expected '-' after")
     if read.data == '#':
         while True:
             read = hd.peek()
@@ -67,12 +65,27 @@ def next_token(hd: lib.Head[str]) -> ty.Union[lib.Error, Token, EOF, None]:
             read = hd.peek(1)
             if read is None:
                 break
-            if ast.isname(read.data):
+            elif ast.isname(read.data):
                 hd.bump()
                 ident_chars.append(read)
             else:
                 break
         return ast.Ident.concat(ident_chars)
+    if read.data == "'":
+        ident_chars = []
+        while True:
+            read = hd.peek(1)
+            if read is None:
+                return hd.err("Unterminated literal", "`'` opened but unclosed before end of file")
+            elif read.data == "'":
+                hd.bump()
+                break
+            else:
+                hd.bump()
+                ident_chars.append(read)
+        return ast.Ident.concat(ident_chars)
+    else:
+        return hd.err("Unknown token", "character does not begin any valid token")
     raise NotImplementedError(hd.peek())
 
 
@@ -89,6 +102,9 @@ def tokens_of_chars(chars: Chars) -> lib.Result[Tokens]:
         if isinstance(res, EOF):
             break
         elif isinstance(res, lib.Error):
+            if res.span is None:
+                res.span = hd.until(fwd)
+                print(hd.span(), fwd.span(), hd.until(fwd))
             return res
         else:
             if res is not None:
@@ -99,11 +115,16 @@ def tokens_of_chars(chars: Chars) -> lib.Result[Tokens]:
     return toks
 
 
-if __name__ == "__main__":
+def main():
     with open("../new-lang") as f:
         text = f.read()
     chars = chars_of_text(text)
     print(chars)
     toks = tokens_of_chars(chars)
+    if isinstance(toks, lib.Error):
+        print(toks)
+        return
     print('\n'.join(map(str, toks)))
 
+if __name__ == "__main__":
+    main()

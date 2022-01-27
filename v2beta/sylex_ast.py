@@ -21,7 +21,7 @@ class Symbol(Enum):
     LEFT = '<-'
     COMMA = ','
     SEMI = ';'
-    SCOPE = '::' # Must be _before_ COLON
+    SCOPE = '::'
     COLON = ':'
 
 def indent(text: str) -> str:

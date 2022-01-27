@@ -112,8 +112,11 @@ class Head(ty.Generic[T]):
     def bump(self, nb: int = 1):
         self.cursor += 1
 
+    def peek_absolute(self, idx: int):
+        return self.stream.peek(idx)
+
     def peek(self, nb: int = 0):
-        return self.stream.peek(self.cursor + nb)
+        return self.peek_absolute(self.cursor + nb)
 
     def clone(self) -> 'Head[T]':
         return Head(self.stream, self.cursor)
@@ -124,7 +127,9 @@ class Head(ty.Generic[T]):
     def until(self, idx: ty.Union[int, 'Head[T]']) -> Span:
         if isinstance(idx, Head):
             idx = idx.cursor
-        return (self.span() or Span.empty()).extend(self.span(idx))
+        else:
+            idx = self.cursor + idx
+        return (self.span() or Span.empty()).extend(self.span_absolute(idx))
 
     def sub(self, fn: ty.Callable[['Head[T]'], Result[U]]) -> Result[Spanned[U]]:
         start = self.cursor
@@ -136,14 +141,17 @@ class Head(ty.Generic[T]):
         else:
             return Spanned.union(self.stream[start:end]).with_data(res)
 
-    def span(self, idx: int = 0) -> ty.Optional[Span]:
-        pk = self.peek(idx)
+    def span_absolute(self, idx: int) -> ty.Optional[Span]:
+        pk = self.peek_absolute(idx)
         if pk is None:
             return None
         return pk.span
 
-    def err(self, kind: str, msg: str) -> Error:
-        return Error(kind, msg, self.span())
+    def span(self, idx: int = 0) -> ty.Optional[Span]:
+        return self.span_absolute(self.cursor + idx)
+
+    def err(self, kind: str, msg: str, span: Span = None) -> Error:
+        return Error(kind, msg, span)
 
     def current(self) -> int:
         return self.cursor
