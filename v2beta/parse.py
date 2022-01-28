@@ -453,7 +453,7 @@ def parse_target(hd: HToken) -> Result[Target, Error]:
 
 
 def main():
-    with open("../new-lang") as f:
+    with open("sylex.conf") as f:
         text = f.read()
     chars = chars_of_text(text)
     print(chars)

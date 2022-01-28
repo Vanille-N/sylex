@@ -185,20 +185,20 @@ class Head(Generic[T]):
         elif isinstance(other, Span):
             span = other
         else:
-            span = self._span_absolute(self.cursor + other)
+            span = self._span_absolute(self._cursor + other)
         return (self.span() or Span.empty()).until(span)
 
     def sub(self, fn: Callable[['Head[T]'], Result[U, V]]) -> SpanResult[U, V]:
         print(f"enter {fn.__name__}")
-        start = self._cursor
-        res = fn(self)
-        end = self._cursor
-        print(f"function {fn.__name__}\n\tread {res}\n\tbetween {start} and {end}")
+        copy = self.clone()
+        res = fn(copy)
+        print(f"function {fn.__name__}\n\tread {res}\n\tbetween {self.span()} and {copy.span()}")
         if isinstance(res, Wrong):
-            self.cursor = start
             return res
         else:
-            return Spanned.union(self._stream[start:end]).with_data(res)
+            span = Spanned.union(self._stream[self._cursor:copy._cursor])
+            self.commit(copy)
+            return span.with_data(res)
 
     def _span_absolute(self, idx: int) -> Span:
         pk = self._peek_absolute(idx)
