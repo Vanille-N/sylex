@@ -35,12 +35,12 @@ class Loc:
         elif self.col > other.col: return 1
         else: return 0
 
-    def __lt__(self, other: 'Loc'): return self.cmp(other) < 0
-    def __le__(self, other: 'Loc'): return self.cmp(other) <= 0
-    def __gt__(self, other: 'Loc'): return self.cmp(other) > 0
-    def __ge__(self, other: 'Loc'): return self.cmp(other) >= 0
+    def __lt__(self, other: 'Loc') -> bool: return self.cmp(other) < 0
+    def __le__(self, other: 'Loc') -> bool: return self.cmp(other) <= 0
+    def __gt__(self, other: 'Loc') -> bool: return self.cmp(other) > 0
+    def __ge__(self, other: 'Loc') -> bool: return self.cmp(other) >= 0
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.line}:{self.col}"
 
 
@@ -68,7 +68,7 @@ class Span:
         else:
             return Span(min(other.start, self.start), max(other.end, self.end))
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"({self.start}..{self.end})"
 
 
@@ -88,7 +88,7 @@ class Spanned(Generic[TCo]):
     def map(self: 'Spanned[TCo]', fn: Callable[[TCo], U]) -> 'Spanned[U]':
         return Spanned(fn(self.data), self.span)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"({self.span.start}@ {self.data} @{self.span.end})"
 
 
@@ -100,7 +100,7 @@ class Stream(Generic[T]):
     def empty() -> 'Stream[T]':
         return Stream([])
 
-    def append(self, data: Spanned[T]):
+    def append(self, data: Spanned[T]) -> None:
         self.data.append(data)
 
     def peek(self, idx: int) -> Optional[Spanned[T]]:
@@ -109,8 +109,8 @@ class Stream(Generic[T]):
         else:
             return None
 
-    def __getitem__(self, idx: slice):
-        return self.data[idx]
+    def __getitem__(self, idx: slice) -> 'Stream[T]':
+        return Stream(self.data[idx])
 
 
 @dataclass
@@ -162,7 +162,7 @@ class Head(Generic[T]):
     def start(stream: Stream[T]) -> 'Head[T]':
         return Head(stream, 0)
 
-    def bump(self, nb: int = 1):
+    def bump(self, nb: int = 1) -> None:
         self._cursor += 1
 
     def _peek_absolute(self, idx: int) -> Optional[Spanned[T]]:
@@ -174,7 +174,7 @@ class Head(Generic[T]):
     def clone(self) -> 'Head[T]':
         return Head(self._stream, self._cursor)
 
-    def commit(self, other: 'Head[T]'):
+    def commit(self, other: 'Head[T]') -> None:
         self._cursor = other._cursor
 
     def until(self, other: Union[int, 'Head[T]', Span, None]) -> Span:
@@ -196,7 +196,7 @@ class Head(Generic[T]):
         if isinstance(res, Wrong):
             return res
         else:
-            span = Spanned.union(self._stream[self._cursor:copy._cursor])
+            span = Spanned.union(self._stream[self._cursor:copy._cursor].data)
             self.commit(copy)
             return span.with_data(res)
 
@@ -209,7 +209,7 @@ class Head(Generic[T]):
     def span(self, idx: int = 0) -> Span:
         return self._span_absolute(self._cursor + idx)
 
-    def err(self, kind: str, msg: str, span) -> Wrong[Error]:
+    def err(self, kind: str, msg: str, span: Span) -> Wrong[Error]:
         return Wrong(Error(kind, msg, self.until(span)))
 
 

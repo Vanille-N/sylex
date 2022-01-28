@@ -452,7 +452,7 @@ def parse_target(hd: HToken) -> Result[Target, Error]:
     return Target(name)
 
 
-def main():
+def main() -> None:
     with open("sylex.conf") as f:
         text = f.read()
     chars = chars_of_text(text)
@@ -461,7 +461,7 @@ def main():
     if isinstance(toks, Wrong):
         print(toks)
         return
-    print('\n'.join(map(str, toks)))
+    print('\n'.join(map(str, toks.data)))
     print("="*15)
     ast = ast_of_tokens(toks)
     if isinstance(ast, Wrong):
