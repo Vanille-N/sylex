@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from typing import Union, Optional, TypeVar, Generic, Any, Callable, Tuple
 from enum import Enum
+from typing import Any, Callable, Generic, Optional, Tuple, TypeVar, Union
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -16,30 +16,42 @@ class Loc:
     col: int
 
     @staticmethod
-    def max() -> 'Loc':
+    def max() -> "Loc":
         return Loc(1_000_000, 1_000_000)
 
     @staticmethod
-    def min() -> 'Loc':
+    def min() -> "Loc":
         return Loc(-1, -1)
 
-    def newline(self) -> 'Loc':
+    def newline(self) -> "Loc":
         return Loc(self.line + 1, 0)
 
-    def newcol(self) -> 'Loc':
+    def newcol(self) -> "Loc":
         return Loc(self.line, self.col + 1)
 
-    def cmp(self, other: 'Loc') -> int:
-        if self.line < other.line: return -1
-        elif self.line > other.line: return 1
-        elif self.col < other.col: return -1
-        elif self.col > other.col: return 1
-        else: return 0
+    def cmp(self, other: "Loc") -> int:
+        if self.line < other.line:
+            return -1
+        elif self.line > other.line:
+            return 1
+        elif self.col < other.col:
+            return -1
+        elif self.col > other.col:
+            return 1
+        else:
+            return 0
 
-    def __lt__(self, other: 'Loc') -> bool: return self.cmp(other) < 0
-    def __le__(self, other: 'Loc') -> bool: return self.cmp(other) <= 0
-    def __gt__(self, other: 'Loc') -> bool: return self.cmp(other) > 0
-    def __ge__(self, other: 'Loc') -> bool: return self.cmp(other) >= 0
+    def __lt__(self, other: "Loc") -> bool:
+        return self.cmp(other) < 0
+
+    def __le__(self, other: "Loc") -> bool:
+        return self.cmp(other) <= 0
+
+    def __gt__(self, other: "Loc") -> bool:
+        return self.cmp(other) > 0
+
+    def __ge__(self, other: "Loc") -> bool:
+        return self.cmp(other) >= 0
 
     def __str__(self) -> str:
         return f"{self.line}:{self.col}"
@@ -51,17 +63,17 @@ class Span:
     end: Loc
 
     @staticmethod
-    def empty() -> 'Span':
+    def empty() -> "Span":
         return Span(Loc.max(), Loc.min())
 
     @staticmethod
-    def unit(loc: Loc) -> 'Span':
+    def unit(loc: Loc) -> "Span":
         return Span(loc, loc)
 
-    def with_data(self, data: T) -> 'Spanned[T]':
+    def with_data(self, data: T) -> "Spanned[T]":
         return Spanned(data, self)
 
-    def until(self, other: Optional[Union[Loc,'Span']]) -> 'Span':
+    def until(self, other: Optional[Union[Loc, "Span"]]) -> "Span":
         if other is None:
             return self
         elif isinstance(other, Loc):
@@ -79,14 +91,14 @@ class Spanned(Generic[TCo]):
     span: Span
 
     @staticmethod
-    def union(lst: list['Spanned[Any]']) -> Span:
+    def union(lst: list["Spanned[Any]"]) -> Span:
         span = Span.empty()
         if len(lst) > 0:
             span.start = min(span.start, lst[0].span.start)
             span.end = max(span.end, lst[-1].span.end)
         return span
 
-    def map(self: 'Spanned[TCo]', fn: Callable[[TCo], U]) -> 'Spanned[U]':
+    def map(self: "Spanned[TCo]", fn: Callable[[TCo], U]) -> "Spanned[U]":
         return Spanned(fn(self.data), self.span)
 
     def __str__(self) -> str:
@@ -98,7 +110,7 @@ class Stream(Generic[T]):
     data: list[Spanned[T]]
 
     @staticmethod
-    def empty() -> 'Stream[T]':
+    def empty() -> "Stream[T]":
         return Stream([])
 
     def append(self, data: Spanned[T]) -> None:
@@ -110,12 +122,13 @@ class Stream(Generic[T]):
         else:
             return None
 
-    def __getitem__(self, idx: slice) -> 'Stream[T]':
+    def __getitem__(self, idx: slice) -> "Stream[T]":
         return Stream(self.data[idx])
 
 
 BackRef = Tuple[Span, Span]
-ErrExtra = Span|None|BackRef
+ErrExtra = Span | None | BackRef
+
 
 @dataclass
 class Error:
@@ -148,6 +161,8 @@ SpanResult = Result[Spanned[UCo], VCo]
 class Maybe(Generic[UCo]):
     data: UCo
     diagnostic: Error
+
+
 # What's the use-case of Maybe, you may ask ?
 # Consider the grammar a?b
 # If you reab cb then a? matches nothing and b fails to read c
@@ -170,7 +185,7 @@ class Head(Generic[T]):
     _cursor: int
 
     @staticmethod
-    def start(stream: Stream[T]) -> 'Head[T]':
+    def start(stream: Stream[T]) -> "Head[T]":
         return Head(stream, 0)
 
     def bump(self, nb: int = 1) -> None:
@@ -182,13 +197,13 @@ class Head(Generic[T]):
     def peek(self, nb: int = 0) -> Optional[Spanned[T]]:
         return self._peek_absolute(self._cursor + nb)
 
-    def clone(self) -> 'Head[T]':
+    def clone(self) -> "Head[T]":
         return Head(self._stream, self._cursor)
 
-    def commit(self, other: 'Head[T]') -> None:
+    def commit(self, other: "Head[T]") -> None:
         self._cursor = other._cursor
 
-    def until(self, other: Union[int, 'Head[T]', Span, None]) -> Span:
+    def until(self, other: Union[int, "Head[T]", Span, None]) -> Span:
         if other is None:
             span = Span.empty()
         elif isinstance(other, Head):
@@ -199,15 +214,17 @@ class Head(Generic[T]):
             span = self._span_absolute(self._cursor + other)
         return (self.span() or Span.empty()).until(span)
 
-    def sub(self, fn: Callable[['Head[T]'], Result[U, V]]) -> SpanResult[U, V]:
+    def sub(self, fn: Callable[["Head[T]"], Result[U, V]]) -> SpanResult[U, V]:
         print(f"enter {fn.__name__}")
         copy = self.clone()
         res = fn(copy)
-        print(f"function {fn.__name__}\n\tread {res}\n\tbetween {self.span()} and {copy.span()}")
+        print(
+            f"function {fn.__name__}\n\tread {res}\n\tbetween {self.span()} and {copy.span()}"
+        )
         if isinstance(res, Wrong):
             return res
         else:
-            span = Spanned.union(self._stream[self._cursor:copy._cursor].data)
+            span = Spanned.union(self._stream[self._cursor : copy._cursor].data)
             self.commit(copy)
             return span.with_data(res)
 
@@ -222,5 +239,3 @@ class Head(Generic[T]):
 
     def err(self, kind: str, msg: str, span: Span) -> Wrong[Error]:
         return Wrong(Error(kind, msg, self.until(span)))
-
-
