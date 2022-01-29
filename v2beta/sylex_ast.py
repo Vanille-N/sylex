@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Sequence, TypeVar, Union
@@ -38,7 +40,7 @@ class Ident:
     name: Spanned[str]
 
     @staticmethod
-    def concat(s: list[Spanned[str]]) -> "Ident":
+    def concat(s: list[Spanned[str]]) -> Ident:
         print(s)
         string = "".join(c.data for c in s)
         span = Spanned.union(s)
@@ -50,7 +52,7 @@ class Ident:
 
 @dataclass
 class DefList:
-    defs: Sequence[Spanned[Union["Def", "Target"]]]
+    defs: Sequence[Spanned[Union[Def, Target]]]
 
     def __str__(self) -> str:
         return "DefList {\n" + "\n".join(indent(f"{d}") for d in self.defs) + "\n}"
@@ -67,7 +69,7 @@ class Target:
 @dataclass
 class Def:
     name: Spanned[Ident]
-    value: Spanned["ItemList"]
+    value: Spanned[ItemList]
 
     def __str__(self) -> str:
         return f"Def {self.name} := " + self.value.__str__()
@@ -75,7 +77,7 @@ class Def:
 
 @dataclass
 class ItemList:
-    items: Sequence[Spanned["Item"] | Spanned["Expand"]]
+    items: Sequence[Spanned[Item] | Spanned[Expand]]
 
     def __str__(self) -> str:
         return (
@@ -85,7 +87,7 @@ class ItemList:
 
 @dataclass
 class Item:
-    entry: Spanned["Entry"]
+    entry: Spanned[Entry]
     tail: Optional[Spanned[ItemList]]
 
     def __str__(self) -> str:
@@ -103,21 +105,56 @@ class Expand:
         return f"Expand({self.name})"
 
 
-Tag = Union["Label", "Induce", "Depend"]
+@dataclass
+class Label:
+    name: Spanned[Ident]
+    params: Spanned[Params]
+
+    def __str__(self) -> str:
+        return f"Label({self.name})\n  {self.params}"
+
+
+@dataclass
+class Induce:
+    name: Spanned[Ident]
+    params: Spanned[Params]
+
+    def __str__(self) -> str:
+        return f"Induce({self.name})\n  {self.params}"
+
+
+@dataclass
+class Depend:
+    name: Spanned[Ident]
+    params: Spanned[Params]
+
+    def __str__(self) -> str:
+        return f"Depend({self.name})\n  {self.params}"
+
+
+@dataclass
+class Params:
+    vals: list[Spanned[Ident]]
+
+    def __str__(self) -> str:
+        return "Params(" + ",".join(f"{v}" for v in self.vals) + ")"
+
+
+Tag = Union[Label, Induce, Depend]
 
 
 @dataclass
 class Entry:
     name: Spanned[Ident]
-    labels: list[Spanned["Label"]]
-    induce: list[Spanned["Induce"]]
-    depend: list[Spanned["Depend"]]
+    labels: list[Spanned[Label]]
+    induce: list[Spanned[Induce]]
+    depend: list[Spanned[Depend]]
 
     @staticmethod
-    def from_name(name: Spanned[Ident]) -> "Entry":
+    def from_name(name: Spanned[Ident]) -> Entry:
         return Entry(name, [], [], [])
 
-    def push(self, mk: Spanned["Tag"]) -> None:
+    def push(self, mk: Spanned[Tag]) -> None:
         if isinstance(mk.data, Induce):
             self.induce.append(mk.span.with_data(mk.data))
         elif isinstance(mk.data, Label):
@@ -136,38 +173,3 @@ class Entry:
         for d in self.depend:
             s += "\n" + indent(f"{d}")
         return s
-
-
-@dataclass
-class Label:
-    name: Spanned[Ident]
-    params: Spanned["Params"]
-
-    def __str__(self) -> str:
-        return f"Label({self.name})\n  {self.params}"
-
-
-@dataclass
-class Induce:
-    name: Spanned[Ident]
-    params: Spanned["Params"]
-
-    def __str__(self) -> str:
-        return f"Induce({self.name})\n  {self.params}"
-
-
-@dataclass
-class Depend:
-    name: Spanned[Ident]
-    params: Spanned["Params"]
-
-    def __str__(self) -> str:
-        return f"Depend({self.name})\n  {self.params}"
-
-
-@dataclass
-class Params:
-    vals: list[Spanned[Ident]]
-
-    def __str__(self) -> str:
-        return "Params(" + ",".join(f"{v}" for v in self.vals) + ")"
