@@ -7,9 +7,9 @@ from typing import Any, Callable, Generic, Optional, Tuple, TypeVar, Union
 T = TypeVar("T")
 U = TypeVar("U")
 V = TypeVar("V")
-TCo = TypeVar("TCo", covariant=True)
-UCo = TypeVar("UCo", covariant=True)
-VCo = TypeVar("VCo", covariant=True)
+TCo = TypeVar("TCo")
+UCo = TypeVar("UCo")
+VCo = TypeVar("VCo")
 
 
 @dataclass

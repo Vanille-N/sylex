@@ -192,7 +192,7 @@ def ast_of_tokens(tokens: Tokens) -> SpanResult[DefList]:
 def parse_deflist(hd: HToken) -> Result[Maybe[DefList]]:
     # DefList := Def *
     start = hd.span()
-    defs: list[Spanned[Def | Target]] = []
+    defs: list[Spanned[Def] | Spanned[Target]] = []
     err = Error("None", "nothing", None)
     while True:
         read = hd.peek()

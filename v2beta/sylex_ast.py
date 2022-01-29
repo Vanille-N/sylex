@@ -52,7 +52,7 @@ class Ident:
 
 @dataclass
 class DefList:
-    defs: Sequence[Spanned[Union[Def, Target]]]
+    defs: Sequence[Spanned[Def] | Spanned[Target]]
 
     def __str__(self) -> str:
         return "DefList {\n" + "\n".join(indent(f"{d}") for d in self.defs) + "\n}"
