@@ -5,9 +5,6 @@ from enum import Enum
 from typing import Any, Callable, Generic, Optional, Tuple, TypeVar, Union
 
 T = TypeVar("T")
-U = TypeVar("U")
-TCo = TypeVar("TCo")
-UCo = TypeVar("UCo")
 
 
 @dataclass
@@ -59,6 +56,8 @@ class Loc:
 
 @dataclass
 class Span:
+    U = TypeVar("U")
+
     start: Loc
     end: Loc
 
@@ -70,7 +69,7 @@ class Span:
     def unit(loc: Loc) -> Span:
         return Span(loc, loc)
 
-    def with_data(self, data: T) -> Spanned[T]:
+    def with_data(self, data: U) -> Spanned[U]:
         return Spanned(data, self)
 
     def until(self, other: Optional[Loc | Span] = None) -> Span:
@@ -87,8 +86,10 @@ class Span:
 
 
 @dataclass
-class Spanned(Generic[TCo]):
-    data: TCo
+class Spanned(Generic[T]):
+    U = TypeVar("U")
+
+    data: T
     span: Span
 
     @staticmethod
@@ -99,7 +100,7 @@ class Spanned(Generic[TCo]):
             span.end = max(span.end, lst[-1].span.end)
         return span
 
-    def map(self: Spanned[TCo], fn: Callable[[TCo], U]) -> Spanned[U]:
+    def map(self, fn: Callable[[T], U]) -> Spanned[U]:
         return Spanned(fn(self.data), self.span)
 
     def __str__(self) -> str:
@@ -144,13 +145,13 @@ class ErrLevel(Enum):
     INFO = 1
 
 
-Result = Union[UCo, Error]
-SpanResult = Result[Spanned[UCo]]
+Result = Union[T, Error]
+SpanResult = Result[Spanned[T]]
 
 
 @dataclass
-class Maybe(Generic[UCo]):
-    data: UCo
+class Maybe(Generic[T]):
+    data: T
     diagnostic: Error
 
 
@@ -172,6 +173,8 @@ class Maybe(Generic[UCo]):
 
 @dataclass
 class Head(Generic[T]):
+    U = TypeVar("U")
+
     _stream: Stream[T]
     _cursor: int
 
