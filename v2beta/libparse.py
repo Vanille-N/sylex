@@ -146,17 +146,8 @@ class ErrLevel(Enum):
     INFO = 1
 
 
-@dataclass
-class Wrong(Generic[TCo]):
-    inner: TCo
-
-
-class Unreachable(Exception):
-    pass
-
-
-Result = Union[UCo, Wrong[VCo]]
-SpanResult = Result[Spanned[UCo], VCo]
+Result = Union[UCo, Error]
+SpanResult = Result[Spanned[UCo]]
 
 
 @dataclass
@@ -216,19 +207,18 @@ class Head(Generic[T]):
             span = self._span_absolute(self._cursor + other)
         return (self.span() or Span.empty()).until(span)
 
-    def sub(self, fn: Callable[[Head[T]], Result[U, V]]) -> SpanResult[U, V]:
+    def sub(self, fn: Callable[[Head[T]], Result[U]]) -> SpanResult[U]:
         print(f"enter {fn.__name__}")
         copy = self.clone()
         res = fn(copy)
         print(
             f"function {fn.__name__}\n\tread {res}\n\tbetween {self.span()} and {copy.span()}"
         )
-        if isinstance(res, Wrong):
+        if isinstance(res, Error):
             return res
-        else:
-            span = Spanned.union(self._stream[self._cursor : copy._cursor].data)
-            self.commit(copy)
-            return span.with_data(res)
+        span = Spanned.union(self._stream[self._cursor : copy._cursor].data)
+        self.commit(copy)
+        return span.with_data(res)
 
     def _span_absolute(self, idx: int) -> Span:
         pk = self._peek_absolute(idx)
@@ -239,5 +229,5 @@ class Head(Generic[T]):
     def span(self, idx: int = 0) -> Span:
         return self._span_absolute(self._cursor + idx)
 
-    def err(self, kind: str, msg: str, span: Span) -> Wrong[Error]:
-        return Wrong(Error(kind, msg, self.until(span)))
+    def err(self, kind: str, msg: str, span: Span) -> Error:
+        return Error(kind, msg, self.until(span))
