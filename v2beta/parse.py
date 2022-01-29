@@ -2,6 +2,7 @@ from libparse import Loc, Stream, Span, Spanned, Head
 from libparse import Result, Wrong, Error, Maybe, SpanResult
 from sylex_ast import *
 from typing import Union
+import os
 
 
 class Unreachable(Exception):
@@ -149,8 +150,8 @@ def tokens_of_chars(chars: Chars) -> Result[Tokens, Error]:
             else:
                 inner = res.inner
                 assert isinstance(inner, Error)
-                if inner.span is None:
-                    inner.span = hd.until(fwd)
+                if inner.extra is None:
+                    inner.extra = hd.until(fwd)
                     print(hd.span(), fwd.span(), hd.until(fwd))
                 return Wrong(inner)
         else:
@@ -452,22 +453,19 @@ def parse_target(hd: HToken) -> Result[Target, Error]:
     return Target(name)
 
 
-def main() -> None:
-    with open("sylex.conf") as f:
+def main(fname: str) -> SpanResult[DefList, Error]:
+    if not os.path.exists(fname):
+        return Wrong(Error("File not found", f"configuration file '{fname}' does not exist", None))
+    with open(fname, 'r') as f:
         text = f.read()
     chars = chars_of_text(text)
-    print(chars)
     toks = tokens_of_chars(chars)
     if isinstance(toks, Wrong):
-        print(toks)
-        return
-    print('\n'.join(map(str, toks.data)))
-    print("="*15)
+        return toks
     ast = ast_of_tokens(toks)
     if isinstance(ast, Wrong):
-        print(ast)
-        return
-    print(ast)
+        return ast
+    return ast
 
 if __name__ == "__main__":
-    main()
+    print(main("sylex.conf"))

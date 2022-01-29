@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from typing import Union, Optional, TypeVar, Generic, Any, Callable
+from typing import Union, Optional, TypeVar, Generic, Any, Callable, Tuple
+from enum import Enum
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -113,11 +114,21 @@ class Stream(Generic[T]):
         return Stream(self.data[idx])
 
 
+BackRef = Tuple[Span, Span]
+ErrExtra = Span|None|BackRef
+
 @dataclass
 class Error:
     kind: str
     msg: str
-    span: Optional[Span]
+    extra: ErrExtra
+
+
+class ErrLevel(Enum):
+    CRITICAL = 4
+    WARNING = 3
+    DETAIL = 2
+    INFO = 1
 
 
 @dataclass
