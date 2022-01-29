@@ -349,7 +349,7 @@ def parse_entry(hd: HToken) -> Result[Maybe[Entry], Error]:
     while True:
         read = hd.peek()
         if read is None or read.data not in [Symbol.LEFT, Symbol.RIGHT, Symbol.COLON]:
-            err = hd.err("Unexpected tag marker",
+            err = hd.err("Expected tag marker",
                     "tags should begin with '<-' or '->' or ':'", start)
             return Maybe(entry, err.inner)
         tag: SpanResult[Tag, Error] = hd.sub(parse_tag)
@@ -432,30 +432,35 @@ def parse_target(hd: HToken) -> Result[Target, Error]:
     # '['
     read = hd.peek()
     if read is None or read.data != Symbol.OPENBRACK:
-        return hd.err("Invalid Target", "should begin with '['", start)
+        return hd.err("Invalid Target",
+                "should begin with '['", start)
     hd.bump()
     # Ident
     read = hd.peek()
     if read is None or not isinstance(read.data, Ident):
-        return hd.err("Invalid Target", "should have a name", start)
+        return hd.err("Invalid Target",
+                "should have a name", start)
     hd.bump()
     name = read.span.with_data(read.data)
     # ']'
     read = hd.peek()
     if read is None or read.data != Symbol.CLOSEBRACK:
-        return hd.err("Invalid Target", "target name should be followed by ']'", start)
+        return hd.err("Invalid Target",
+                "target name should be followed by ']'", start)
     hd.bump()
     # ';'
     read = hd.peek()
     if read is None or read.data != Symbol.SEMI:
-        return hd.err("Invalid Target", "should be ended by ';'", start)
+        return hd.err("Invalid Target",
+                "should be ended by ';'", start)
     hd.bump()
     return Target(name)
 
 
 def main(fname: str) -> SpanResult[DefList, Error]:
     if not os.path.exists(fname):
-        return Wrong(Error("File not found", f"configuration file '{fname}' does not exist", None))
+        return Wrong(Error("File not found",
+            f"configuration file '{fname}' does not exist", None))
     with open(fname, 'r') as f:
         text = f.read()
     chars = chars_of_text(text)

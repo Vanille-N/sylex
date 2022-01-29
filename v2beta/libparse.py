@@ -174,7 +174,7 @@ class Head(Generic[T]):
         return Head(stream, 0)
 
     def bump(self, nb: int = 1) -> None:
-        self._cursor += 1
+        self._cursor += nb
 
     def _peek_absolute(self, idx: int) -> Optional[Spanned[T]]:
         return self._stream.peek(idx)
