@@ -1,23 +1,7 @@
-from typing import Union
-import os
+from os import path
 
-from libparse import (
-    Error,
-    Head,
-    Loc,
-    Maybe,
-    Result,
-    Span,
-    Spanned,
-    SpanResult,
-    Stream,
-)
+from libparse import Error, Head, Loc, Maybe, Result, Span, Spanned, SpanResult, Stream
 from sylex_ast import *
-
-
-class Unreachable(Exception):
-    pass
-
 
 Chars = Stream[str]
 
@@ -34,7 +18,7 @@ def chars_of_text(text: str) -> Chars:
     return chars
 
 
-Token = Union[Symbol, Ident]
+Token = Symbol | Ident
 Tokens = Stream[Token]
 HToken = Head[Token]
 
@@ -43,7 +27,7 @@ class EOF:
     pass
 
 
-def next_token(hd: Head[str]) -> Result[Union[Token, EOF, None]]:
+def next_token(hd: Head[str]) -> Result[Token | EOF | None]:
     # About the return type
     #   Error -> something wrong happened
     #   EOF -> no more tokens
@@ -53,6 +37,7 @@ def next_token(hd: Head[str]) -> Result[Union[Token, EOF, None]]:
     read = hd.peek()
     if read is None:
         return EOF()
+
     if read.data == "<":
         # Left arrow
         # '<' '-'
@@ -60,10 +45,8 @@ def next_token(hd: Head[str]) -> Result[Union[Token, EOF, None]]:
         read = hd.peek()
         if read is not None and read.data == "-":
             return Symbol.LEFT
-        else:
-            return hd.err(
-                "Unknown token", "'<' unterminated, expected '-' after", start
-            )
+        return hd.err("Unknown token", "'<' unterminated, expected '-' after", start)
+
     if read.data == "#":
         # Line comment
         # '#' [^'\n']* '\n'
@@ -74,10 +57,11 @@ def next_token(hd: Head[str]) -> Result[Union[Token, EOF, None]]:
             if read.data == "\n":
                 return None
             hd.bump()
-        raise Unreachable()
+
     if read.data in [" ", "\n", "\t"]:
         # Whitespace
         return None
+
     if read.data == ":":
         # ':' ':'
         read1 = hd.peek(1)
@@ -85,6 +69,7 @@ def next_token(hd: Head[str]) -> Result[Union[Token, EOF, None]]:
             hd.bump()
             return Symbol.SCOPE
         # Else is a fallthrough: will be handled by 1-char symbols
+
     if read.data == "-":
         # '-' '>'
         read1 = hd.peek(1)
@@ -92,10 +77,12 @@ def next_token(hd: Head[str]) -> Result[Union[Token, EOF, None]]:
             hd.bump()
             return Symbol.RIGHT
         # Else is a fallthrough so that an identifier can still be caught
+
     # The following loop takes care of all 1-char symbols
     for sym in Symbol:
         if read.data == sym.value:
             return sym
+
     # Identifier contains 'a-z' or 'A-Z' or '-' '.' '_'
     # Can also take the form `'` ... `'` with escaped characters
     if isname(read.data):
@@ -104,43 +91,43 @@ def next_token(hd: Head[str]) -> Result[Union[Token, EOF, None]]:
             read = hd.peek(1)
             if read is None:
                 break
-            elif isname(read.data):
-                hd.bump()
-                ident_chars.append(read)
-            else:
+            if not isname(read.data):
                 break
+            hd.bump()
+            ident_chars.append(read)
         return Ident.concat(ident_chars)
-    if read.data == "'":
-        ident_chars = []
-        while True:
-            read = hd.peek(1)
-            if read is None:
-                # premature EOF
-                return hd.err(
-                    "Unterminated literal",
-                    "`'` opened but unclosed before end of file",
-                    start,
-                )
-            elif read.data == "\\":
-                # escape next character
-                hd.bump()
-                read = hd.peek(1)
-                if read is None:
-                    return hd.err("Unterminated escape", "'\\' at end of file", start)
-                ident_chars.append(read)
-            elif read.data == "'":
-                # end literal
-                hd.bump()
-                break
-            else:
-                # default is a single normal character
-                hd.bump()
-                ident_chars.append(read)
-        return Ident.concat(ident_chars)
-    else:
+
+    if read.data != "'":
         return hd.err(
             "Unknown token", "character does not begin any valid token", start
         )
+
+    ident_chars = []
+    while True:
+        read = hd.peek(1)
+        if read is None:
+            # premature EOF
+            return hd.err(
+                "Unterminated literal",
+                "`'` opened but unclosed before end of file",
+                start,
+            )
+        if read.data == "\\":
+            # escape next character
+            hd.bump()
+            read = hd.peek(1)
+            if read is None:
+                return hd.err("Unterminated escape", "'\\' at end of file", start)
+            ident_chars.append(read)
+        elif read.data == "'":
+            # end literal
+            hd.bump()
+            break
+        else:
+            # default is a single normal character
+            hd.bump()
+            ident_chars.append(read)
+    return Ident.concat(ident_chars)
 
 
 def tokens_of_chars(chars: Chars) -> Result[Tokens]:
@@ -154,18 +141,20 @@ def tokens_of_chars(chars: Chars) -> Result[Tokens]:
         print(f"Exit: {fwd.peek()}")
         print(f"With: {res}")
         print()
+
+        if isinstance(res, Error):
+            inner = res
+            if inner.extra is None:
+                inner.extra = hd.until(fwd)
+                print(hd.span(), fwd.span(), hd.until(fwd))
+            return inner
+
         if isinstance(res, EOF):
             break
         elif res is None:
             fwd.bump()
             hd.commit(fwd)
             continue
-        elif isinstance(res, Error):
-            inner = res
-            if inner.extra is None:
-                inner.extra = hd.until(fwd)
-                print(hd.span(), fwd.span(), hd.until(fwd))
-            return inner
         else:
             spanned = hd.until(fwd).with_data(res)
             toks.append(spanned)
@@ -182,11 +171,10 @@ def ast_of_tokens(tokens: Tokens) -> SpanResult[DefList]:
     res: SpanResult[Maybe[DefList]] = hd.sub(parse_deflist)
     if isinstance(res, Error):
         return res
-    else:
-        if hd.peek() is None:  # reached EOF as expected
-            return res.map(lambda x: x.data)
-        else:
-            return res.data.diagnostic
+
+    if hd.peek() is None:  # reached EOF as expected
+        return res.map(lambda x: x.data)
+    return res.data.diagnostic
 
 
 def parse_deflist(hd: HToken) -> Result[Maybe[DefList]]:
@@ -256,52 +244,8 @@ def parse_itemlist(hd: HToken) -> Result[ItemList]:
         return hd.err(
             "Invalid ItemList", "EOF reached while trying to read a list", start
         )
-    if read.data == Symbol.OPENBRACE:
-        # Case of '{' Item ','* '}'
-        hd.bump()
-        # TODO: list[Spanned[Item|Expand]]
-        lst: list[Spanned[Item] | Spanned[Expand]] = []
-        latest_error = None
-        while True:
-            read = hd.peek()
-            if read is None:
-                return hd.err(
-                    "Invalid ItemList", "EOF reached while trying to read a list", start
-                )
-            if read.data == Symbol.CLOSEBRACE:
-                # Reached the closing '}'
-                hd.bump()
-                return ItemList(lst)
-            # otherwise read an Item then maybe a ','
-            # if no ',' then it has to stop afterwards
-            item: SpanResult[Expand | Maybe[Item]] = hd.sub(parse_item)
-            if isinstance(item, Error):
-                return item
-            # TODO: coercion
-            if isinstance(item.data, Expand):
-                lst.append(item.span.with_data(item.data))
-            else:
-                lst.append(item.span.with_data(item.data.data))
-            read = hd.peek()
-            if read is None:
-                if latest_error is not None:
-                    return latest_error
-                return hd.err("Invalid ItemList", "unclosed '{' before EOF", start)
-            if read.data == Symbol.COMMA:
-                hd.bump()
-            else:
-                # No trailing comma, it should be the end
-                read = hd.peek()
-                if read is None or read.data != Symbol.CLOSEBRACE:
-                    if latest_error is not None:
-                        return latest_error
-                    return hd.err(
-                        "Invalid ItemList",
-                        "expected '}' after no trailing comma",
-                        start,
-                    )
-                # (next iteration will take care of actually returning)
-    else:
+
+    if read.data != Symbol.OPENBRACE:
         # did not start with a '{' so it should be a single Item
         obj: SpanResult[Expand | Maybe[Item]] = hd.sub(parse_item)
         if isinstance(obj, Error):
@@ -311,6 +255,51 @@ def parse_itemlist(hd: HToken) -> Result[ItemList]:
             return ItemList([obj.span.with_data(obj.data)])
         else:
             return ItemList([obj.span.with_data(obj.data.data)])
+
+    # Case of '{' Item ','* '}'
+    hd.bump()
+    # TODO: list[Spanned[Item|Expand]]
+    lst: list[Spanned[Item] | Spanned[Expand]] = []
+    latest_error = None
+    while True:
+        read = hd.peek()
+        if read is None:
+            return hd.err(
+                "Invalid ItemList", "EOF reached while trying to read a list", start
+            )
+        if read.data == Symbol.CLOSEBRACE:
+            # Reached the closing '}'
+            hd.bump()
+            return ItemList(lst)
+        # otherwise read an Item then maybe a ','
+        # if no ',' then it has to stop afterwards
+        item: SpanResult[Expand | Maybe[Item]] = hd.sub(parse_item)
+        if isinstance(item, Error):
+            return item
+        # TODO: coercion
+        if isinstance(item.data, Expand):
+            lst.append(item.span.with_data(item.data))
+        else:
+            lst.append(item.span.with_data(item.data.data))
+        read = hd.peek()
+        if read is None:
+            if latest_error is not None:
+                return latest_error
+            return hd.err("Invalid ItemList", "unclosed '{' before EOF", start)
+        if read.data == Symbol.COMMA:
+            hd.bump()
+        else:
+            # No trailing comma, it should be the end
+            read = hd.peek()
+            if read is None or read.data != Symbol.CLOSEBRACE:
+                if latest_error is not None:
+                    return latest_error
+                return hd.err(
+                    "Invalid ItemList",
+                    "expected '}' after no trailing comma",
+                    start,
+                )
+            # (next iteration will take care of actually returning)
 
 
 def parse_item(hd: HToken) -> Result[Expand | Maybe[Item]]:
@@ -417,10 +406,12 @@ def parse_params(hd: HToken) -> Result[Params]:
         read = hd.peek()
         if read is None:
             return hd.err("Invalid Params", "unclosed '(' at end of file", start)
-        elif read.data == Symbol.CLOSEPAREN:
+
+        if read.data == Symbol.CLOSEPAREN:
             hd.bump()
             return Params(inner)
-        elif isinstance(read.data, Ident):
+
+        if isinstance(read.data, Ident):
             hd.bump()
             inner.append(read.span.with_data(read.data))
             read = hd.peek()
@@ -430,7 +421,8 @@ def parse_params(hd: HToken) -> Result[Params]:
                 hd.bump()
             elif read.data != Symbol.CLOSEPAREN:
                 return hd.err("Invalid Params", "expected ',' or ')'", start)
-            # (next iteration will return)
+
+        # (next iteration will return)
 
 
 def parse_target(hd: HToken) -> Result[Target]:
@@ -461,7 +453,7 @@ def parse_target(hd: HToken) -> Result[Target]:
 
 
 def main(fname: str) -> SpanResult[DefList]:
-    if not os.path.exists(fname):
+    if not path.exists(fname):
         return Error(
             "File not found", f"configuration file '{fname}' does not exist", None
         )

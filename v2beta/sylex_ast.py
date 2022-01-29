@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Sequence, TypeVar, Union
-
-T = TypeVar("T")
-U = TypeVar("U")
+from typing import Optional, Sequence
 
 from libparse import Loc, Span, Spanned
 
@@ -140,7 +137,7 @@ class Params:
         return "Params(" + ",".join(f"{v}" for v in self.vals) + ")"
 
 
-Tag = Union[Label, Induce, Depend]
+Tag = Label | Induce | Depend
 
 
 @dataclass

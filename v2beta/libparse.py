@@ -6,10 +6,8 @@ from typing import Any, Callable, Generic, Optional, Tuple, TypeVar, Union
 
 T = TypeVar("T")
 U = TypeVar("U")
-V = TypeVar("V")
 TCo = TypeVar("TCo")
 UCo = TypeVar("UCo")
-VCo = TypeVar("VCo")
 
 
 @dataclass
@@ -75,10 +73,11 @@ class Span:
     def with_data(self, data: T) -> Spanned[T]:
         return Spanned(data, self)
 
-    def until(self, other: Optional[Union[Loc, Span]]) -> Span:
+    def until(self, other: Optional[Loc | Span] = None) -> Span:
         if other is None:
             return self
-        elif isinstance(other, Loc):
+
+        if isinstance(other, Loc):
             return Span(min(other, self.start), max(other, self.end))
         else:
             return Span(min(other.start, self.start), max(other.end, self.end))
@@ -119,10 +118,9 @@ class Stream(Generic[T]):
         self.data.append(data)
 
     def peek(self, idx: int) -> Optional[Spanned[T]]:
-        if idx < len(self.data):
-            return self.data[idx]
-        else:
+        if idx >= len(self.data):
             return None
+        return self.data[idx]
 
     def __getitem__(self, idx: slice) -> Stream[T]:
         return Stream(self.data[idx])
@@ -196,7 +194,7 @@ class Head(Generic[T]):
     def commit(self, other: Head[T]) -> None:
         self._cursor = other._cursor
 
-    def until(self, other: Union[int, Head[T], Span, None]) -> Span:
+    def until(self, other: int | Head[T] | Span | None) -> Span:
         if other is None:
             span = Span.empty()
         elif isinstance(other, Head):
