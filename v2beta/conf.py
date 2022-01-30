@@ -1,15 +1,17 @@
 from libparse import Loc, Stream, Span, Spanned, Head
-from libparse import Result, Wrong, Error, ErrLevel
+from libparse import Result, Error, ErrLevel
 import sylex_ast as ast
 from typing import Union, Tuple
 from enum import Enum
 from dataclasses import dataclass
 
+
 @dataclass
 class File:
     path: list[str]
     name: str
-    ext: str|None
+    ext: str | None
+
 
 class Label(Enum):
     ROOT = "root"
@@ -18,6 +20,7 @@ class Label(Enum):
     PDF = "pdf"
     FIG = "fig"
 
+
 @dataclass
 class MetaFile:
     file: File
@@ -25,9 +28,11 @@ class MetaFile:
     depend: list[File]
     label: Label
 
+
 @dataclass
 class Feature:
     path: list[str]
+
 
 @dataclass
 class Target:
@@ -37,10 +42,12 @@ class Target:
     root: File
     features: list[Feature]
 
+
 @dataclass
 class Config:
     targets: list[Target]
     errors: list[Tuple[ErrLevel, Error]]
+
 
 # Config checks                             Critical ?
 #  - exist & unique
