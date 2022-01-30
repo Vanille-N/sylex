@@ -60,18 +60,19 @@ class Span:
 
     start: Loc
     end: Loc
+    text: Text|None
 
     @staticmethod
     def empty() -> Span:
-        return Span(Loc.max(), Loc.min())
+        return Span(Loc.max(), Loc.min(), None)
 
     @staticmethod
     def max() -> Span:
-        return Span(Loc.max(), Loc.max())
+        return Span(Loc.max(), Loc.max(), None)
 
     @staticmethod
-    def unit(loc: Loc) -> Span:
-        return Span(loc, loc)
+    def unit(loc: Loc, text: Text) -> Span:
+        return Span(loc, loc, text)
 
     def with_data(self, data: U) -> Spanned[U]:
         return Spanned(data, self)
@@ -81,12 +82,37 @@ class Span:
             return self
 
         if isinstance(other, Loc):
-            return Span(min(other, self.start), max(other, self.end))
+            return Span(min(other, self.start), max(other, self.end), self.text)
         else:
-            return Span(min(other.start, self.start), max(other.end, self.end))
+            text = self.text or other.text
+            return Span(min(other.start, self.start), max(other.end, self.end), text)
+
+    def is_one_line(self) -> bool:
+        return self.start.line == self.end.line
 
     def __str__(self) -> str:
         return f"({self.start}..{self.end})"
+
+    def show(self) -> str:
+        return self.text.show(self)
+
+
+class Text:
+    def __init__(self, raw: str) -> None:
+        self.lines = raw.split('\n')
+
+    def show(self, span: Span) -> str:
+        if span.is_one_line():
+            s = self.lines[span.start.line] + "\n"
+            s += " " * span.start.col + "^" * (span.end.col + 1 - span.start.col)
+            return s
+        else:
+            s = self.lines[span.start.line] + "\n"
+            s += " " * span.start.col + "^" * (len(self.lines[span.start.line]) + 1 - span.start.col) + "\n"
+            s += "    ...\n"
+            s += self.lines[span.end.line] + "\n"
+            s += "^" * (span.end.col + 1)
+            return s
 
 
 @dataclass
@@ -174,6 +200,44 @@ class Maybe(Generic[T]):
 # instead of
 #                       ^ expected ]
 
+@dataclass
+class Hint:
+    peek_idx: int
+    take_idx: int
+    bump_idx: int
+
+    @staticmethod
+    def start() -> Hint:
+        return Hint(-1, -1, -1)
+
+    def clone(self) -> Hint:
+        return Hint(self.peek_idx, self.take_idx, self.bump_idx)
+
+    def commit(self, other: Hint) -> None:
+        self.peek_idx = other.peek_idx
+        self.take_idx = other.take_idx
+        self.bump_idx = other.bump_idx
+
+    def bump(self, idx: int, value: Any) -> None:
+        print(f"bump from {self.bump_idx} to {idx}")
+        if idx <= self.bump_idx:
+            raise Exception(f"cannot bump '{value}': {idx} has already been bumped before")
+        if idx > self.take_idx:
+            raise Exception(f"cannot bump '{value}': {idx} must be taken before bumped")
+        if idx > self.bump_idx + 1:
+            raise Exception(f"cannot bump '{value}': {self.bump_idx + 1} has not been bumped before {idx}")
+        self.bump_idx = idx
+
+    def take(self, idx: int, value: Any) -> None:
+        print(f"take from {self.take_idx} to {idx}")
+        if idx <= self.take_idx:
+            raise Exception(f"cannot take '{value}': {idx} has already been taken before")
+        if idx <= self.bump_idx:
+            raise Exception(f"cannot take '{value}': {idx} has already been bumped before")
+        if idx > self.take_idx + 1:
+            raise Exception(f"cannot take '{value}': {self.take_idx + 1} has not been taken before {idx}")
+        self.take_idx = idx
+
 
 @dataclass
 class Head(Generic[T]):
@@ -181,16 +245,15 @@ class Head(Generic[T]):
 
     _stream: Stream[T]
     _cursor: int
-    _can_bump: bool
+    _hint: Hint
 
     @staticmethod
     def start(stream: Stream[T]) -> Head[T]:
-        return Head(stream, 0, False)
+        return Head(stream, 0, Hint.start())
 
     def bump(self, nb: int = 1) -> None:
-        assert self._can_bump
         self._cursor += nb
-        self._can_bump = False
+        self._hint.bump(self._cursor - 1, self._peek_absolute(self._cursor - 1))
 
     def _peek_absolute_spanned(self, idx: int) -> Optional[Spanned[T]]:
         return self._stream.peek(idx)
@@ -201,15 +264,25 @@ class Head(Generic[T]):
             return None
         return res.data
 
+    def _peek(self, nb: int, take: bool) -> Optional[T]:
+        idx = self._cursor + nb
+        value = self._peek_absolute(idx)
+        if take:
+            self._hint.take(idx, value)
+        return value
+
     def peek(self, nb: int = 0) -> Optional[T]:
-        self._can_bump = True
-        return self._peek_absolute(self._cursor + nb)
+        return self._peek(nb, False)
+
+    def take(self, nb: int = 0) -> Optional[T]:
+        return self._peek(nb, True)
 
     def clone(self) -> Head[T]:
-        return Head(self._stream, self._cursor, self._can_bump)
+        return Head(self._stream, self._cursor, self._hint.clone())
 
     def commit(self, other: Head[T]) -> None:
         self._cursor = other._cursor
+        self._hint.commit(other._hint)
 
     def until(self, other: int | Head[T] | Span | None) -> Span:
         if other is None:
@@ -223,12 +296,13 @@ class Head(Generic[T]):
         return (self.span() or Span.empty()).until(span)
 
     def sub(self, fn: Callable[[Head[T]], Result[U]]) -> SpanResult[U]:
-        self._can_bump = False
         print(f"enter {fn.__name__}")
         copy = self.clone()
+        start = copy.span()
         res = fn(copy)
+        end = copy.span(-1)
         print(
-            f"function {fn.__name__}\n\tread {res}\n\tbetween {self.span()} and {copy.span()}"
+            f"function {fn.__name__}\n\tread {res}\n=====\n{start.until(end).show()}\n====="
         )
         if isinstance(res, Error):
             return res
@@ -239,7 +313,7 @@ class Head(Generic[T]):
     def _span_absolute(self, idx: int) -> Span:
         pk = self._peek_absolute_spanned(idx)
         if pk is None:
-            return Span(Loc.max(), Loc.max())
+            return Span.max()
         return pk.span
 
     def span(self, idx: int = 0) -> Span:
