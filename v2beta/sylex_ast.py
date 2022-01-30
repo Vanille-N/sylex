@@ -26,7 +26,6 @@ class Symbol(Enum):
     SEMI = ";"
     SCOPE = "::"
     COLON = ":"
-    EOF = "\0"
 
 
 def indent(text: str) -> str:
@@ -35,14 +34,12 @@ def indent(text: str) -> str:
 
 @dataclass
 class Ident:
-    name: Spanned[str]
+    name: str
 
     @staticmethod
-    def concat(s: list[Spanned[str]]) -> Ident:
-        print(s)
-        string = "".join(c.data for c in s)
-        span = Spanned.union(s)
-        return Ident(span.with_data(string))
+    def concat(s: list[str]) -> Ident:
+        string = "".join(s)
+        return Ident(string)
 
     def __str__(self) -> str:
         return f"Ident({self.name})"

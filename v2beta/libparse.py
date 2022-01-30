@@ -66,6 +66,10 @@ class Span:
         return Span(Loc.max(), Loc.min())
 
     @staticmethod
+    def max() -> Span:
+        return Span(Loc.max(), Loc.max())
+
+    @staticmethod
     def unit(loc: Loc) -> Span:
         return Span(loc, loc)
 
@@ -118,7 +122,7 @@ class Stream(Generic[T]):
     def append(self, data: Spanned[T]) -> None:
         self.data.append(data)
 
-    def peek(self, idx: int) -> Optional[Spanned[T]]:
+    def peek(self, idx: int) -> Spanned[T]|None:
         if idx >= len(self.data):
             return None
         return self.data[idx]
@@ -177,22 +181,32 @@ class Head(Generic[T]):
 
     _stream: Stream[T]
     _cursor: int
+    _can_bump: bool
 
     @staticmethod
     def start(stream: Stream[T]) -> Head[T]:
-        return Head(stream, 0)
+        return Head(stream, 0, False)
 
     def bump(self, nb: int = 1) -> None:
+        assert self._can_bump
         self._cursor += nb
+        self._can_bump = False
 
-    def _peek_absolute(self, idx: int) -> Optional[Spanned[T]]:
+    def _peek_absolute_spanned(self, idx: int) -> Optional[Spanned[T]]:
         return self._stream.peek(idx)
 
-    def peek(self, nb: int = 0) -> Optional[Spanned[T]]:
+    def _peek_absolute(self, idx: int) -> Optional[T]:
+        res = self._peek_absolute_spanned(idx)
+        if res is None:
+            return None
+        return res.data
+
+    def peek(self, nb: int = 0) -> Optional[T]:
+        self._can_bump = True
         return self._peek_absolute(self._cursor + nb)
 
     def clone(self) -> Head[T]:
-        return Head(self._stream, self._cursor)
+        return Head(self._stream, self._cursor, self._can_bump)
 
     def commit(self, other: Head[T]) -> None:
         self._cursor = other._cursor
@@ -209,6 +223,7 @@ class Head(Generic[T]):
         return (self.span() or Span.empty()).until(span)
 
     def sub(self, fn: Callable[[Head[T]], Result[U]]) -> SpanResult[U]:
+        self._can_bump = False
         print(f"enter {fn.__name__}")
         copy = self.clone()
         res = fn(copy)
@@ -222,7 +237,7 @@ class Head(Generic[T]):
         return span.with_data(res)
 
     def _span_absolute(self, idx: int) -> Span:
-        pk = self._peek_absolute(idx)
+        pk = self._peek_absolute_spanned(idx)
         if pk is None:
             return Span(Loc.max(), Loc.max())
         return pk.span
