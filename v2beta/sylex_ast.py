@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Sequence
 
-from libparse import Loc, Span, Spanned
+from libparse import Spanned
 
 
 def isname(c: str) -> bool:
@@ -26,6 +26,7 @@ class Symbol(Enum):
     SEMI = ";"
     SCOPE = "::"
     COLON = ":"
+    EOF = "\0"
 
 
 def indent(text: str) -> str:
@@ -49,6 +50,7 @@ class Ident:
 
 @dataclass
 class DefList:
+    # TODO: Use Sequence[Spanned[Def | Target]] instead
     defs: Sequence[Spanned[Def] | Spanned[Target]]
 
     def __str__(self) -> str:
@@ -74,7 +76,7 @@ class Def:
 
 @dataclass
 class ItemList:
-    items: Sequence[Spanned[Item] | Spanned[Expand]]
+    items: Sequence[Spanned[Item | Expand]]
 
     def __str__(self) -> str:
         return (

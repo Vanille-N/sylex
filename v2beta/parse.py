@@ -23,11 +23,7 @@ Tokens = Stream[Token]
 HToken = Head[Token]
 
 
-class EOF:
-    pass
-
-
-def next_token(hd: Head[str]) -> Result[Token | EOF | None]:
+def next_token(hd: Head[str]) -> Result[Token | None]:
     # About the return type
     #   Error -> something wrong happened
     #   EOF -> no more tokens
@@ -36,7 +32,7 @@ def next_token(hd: Head[str]) -> Result[Token | EOF | None]:
     start = hd.span()
     read = hd.peek()
     if read is None:
-        return EOF()
+        return Symbol.EOF
 
     if read.data == "<":
         # Left arrow
@@ -53,7 +49,7 @@ def next_token(hd: Head[str]) -> Result[Token | EOF | None]:
         while True:
             read = hd.peek()
             if read is None:
-                return EOF()
+                return Symbol.EOF
             if read.data == "\n":
                 return None
             hd.bump()
@@ -127,6 +123,7 @@ def next_token(hd: Head[str]) -> Result[Token | EOF | None]:
             # default is a single normal character
             hd.bump()
             ident_chars.append(read)
+
     return Ident.concat(ident_chars)
 
 
@@ -134,6 +131,7 @@ def tokens_of_chars(chars: Chars) -> Result[Tokens]:
     # Call next_token repeatedly until the whole stream is consumed
     toks: Tokens = Stream.empty()
     hd = Head.start(chars)
+
     while True:
         fwd = hd.clone()
         print(f"Enter: {fwd.peek()}")
@@ -149,17 +147,20 @@ def tokens_of_chars(chars: Chars) -> Result[Tokens]:
                 print(hd.span(), fwd.span(), hd.until(fwd))
             return inner
 
-        if isinstance(res, EOF):
+        if res == Symbol.EOF:
             break
+
         elif res is None:
             fwd.bump()
             hd.commit(fwd)
             continue
+
         else:
             spanned = hd.until(fwd).with_data(res)
             toks.append(spanned)
             fwd.bump()
             hd.commit(fwd)
+
     return toks
 
 
@@ -168,20 +169,14 @@ def tokens_of_chars(chars: Chars) -> Result[Tokens]:
 
 def ast_of_tokens(tokens: Tokens) -> SpanResult[DefList]:
     hd = Head.start(tokens)
-    res: SpanResult[Maybe[DefList]] = hd.sub(parse_deflist)
-    if isinstance(res, Error):
-        return res
-
-    if hd.peek() is None:  # reached EOF as expected
-        return res.map(lambda x: x.data)
-    return res.data.diagnostic
+    res: SpanResult[DefList] = hd.sub(parse_deflist)
+    return res
 
 
-def parse_deflist(hd: HToken) -> Result[Maybe[DefList]]:
+def parse_deflist(hd: HToken) -> Result[DefList]:
     # DefList := Def *
     start = hd.span()
     defs: list[Spanned[Def] | Spanned[Target]] = []
-    err = Error("None", "nothing", None)
     while True:
         read = hd.peek()
         if read is None:
@@ -200,38 +195,46 @@ def parse_deflist(hd: HToken) -> Result[Maybe[DefList]]:
             defs.append(item_target)
         else:
             return hd.err("Unknown token", "expected '$' or '['", start)
-    return Maybe(DefList(defs), err)
+    return DefList(defs)
 
 
 def parse_def(hd: HToken) -> Result[Def]:
     # Def := '$' Ident '=' ItemList ';'
     start = hd.span()
+
     # '$'
     read = hd.peek()
     if read is None or read.data != Symbol.DECLARE:
         return hd.err("Invalid Def", "expect a Def to start with a '$'", start)
     hd.bump()
+
     # Ident
     read = hd.peek()
     if read is None or not isinstance(read.data, Ident):
         return hd.err("Invalid Def", "'$' should be followed by a name", start)
+
+    # TODO: Waiting mypy 0.940
     name: Spanned[Ident] = read.span.with_data(read.data)
     hd.bump()
+
     # '='
     read = hd.peek()
     if read is None or read.data != Symbol.EQUAL:
         return hd.err("Invalid Def", "expected an '=' sign", start)
     hd.bump()
+
     # ItemList
     val: SpanResult[ItemList] = hd.sub(parse_itemlist)
     if isinstance(val, Error):
         return val
     value = val
+
     # ';'
     read = hd.peek()
     if read is None or read.data != Symbol.SEMI:
         return hd.err("Invalid Def", "expected ';' at the end", start)
     hd.bump()
+
     return Def(name, value)
 
 
@@ -250,8 +253,9 @@ def parse_itemlist(hd: HToken) -> Result[ItemList]:
         obj: SpanResult[Expand | Maybe[Item]] = hd.sub(parse_item)
         if isinstance(obj, Error):
             return obj
-        # TODO: coercion
-        elif isinstance(obj.data, Expand):
+
+        # TODO: Waiting mypy 0.940
+        if isinstance(obj.data, Expand):
             return ItemList([obj.span.with_data(obj.data)])
         else:
             return ItemList([obj.span.with_data(obj.data.data)])
@@ -259,7 +263,7 @@ def parse_itemlist(hd: HToken) -> Result[ItemList]:
     # Case of '{' Item ','* '}'
     hd.bump()
     # TODO: list[Spanned[Item|Expand]]
-    lst: list[Spanned[Item] | Spanned[Expand]] = []
+    lst: list[Spanned[Item | Expand]] = []
     latest_error = None
     while True:
         read = hd.peek()
@@ -276,11 +280,14 @@ def parse_itemlist(hd: HToken) -> Result[ItemList]:
         item: SpanResult[Expand | Maybe[Item]] = hd.sub(parse_item)
         if isinstance(item, Error):
             return item
-        # TODO: coercion
+
+        # TODO: Waiting mypy 0.940
         if isinstance(item.data, Expand):
-            lst.append(item.span.with_data(item.data))
+            data: Expand | Item = item.data
         else:
-            lst.append(item.span.with_data(item.data.data))
+            data = item.data.data
+        lst.append(item.span.with_data(data))
+
         read = hd.peek()
         if read is None:
             if latest_error is not None:
@@ -315,8 +322,11 @@ def parse_item(hd: HToken) -> Result[Expand | Maybe[Item]]:
         if read is None or not isinstance(read.data, Ident):
             return hd.err("Invalid expansion", "expected identifier after '$'", start)
         hd.bump()
+
+        # TODO: Waiting mypy 0.940
         ident: Spanned[Ident] = read.span.with_data(read.data)
         return Expand(ident)
+
     # otherwise it should be an Entry
     entry: SpanResult[Maybe[Entry]] = hd.sub(parse_entry)
     if isinstance(entry, Error):
@@ -340,7 +350,10 @@ def parse_entry(hd: HToken) -> Result[Maybe[Entry]]:
     if read is None or not isinstance(read.data, Ident):
         return hd.err("Invalid Entry", "should start with an Ident", start)
     hd.bump()
+
+    # TODO: Waiting mypy 0.940
     name: Spanned[Ident] = read.span.with_data(read.data)
+
     entry = Entry.from_name(name)
     # list of Tag
     while True:
@@ -355,7 +368,7 @@ def parse_entry(hd: HToken) -> Result[Maybe[Entry]]:
         tag: SpanResult[Tag] = hd.sub(parse_tag)
         if isinstance(tag, Error):
             return tag
-        entry.push(tag.span.with_data(tag.data))
+        entry.push(tag)
 
 
 def parse_tag(hd: HToken) -> Result[Tag]:
@@ -372,7 +385,10 @@ def parse_tag(hd: HToken) -> Result[Tag]:
     read = hd.peek()
     if read is None or not isinstance(read.data, Ident):
         return hd.err("Invalid Tag", "should have a name", start)
+
+    # TODO: Waiting mypy 0.940
     name: Spanned[Ident] = read.span.with_data(read.data)
+
     hd.bump()
     # If there are params they start with '('
     read = hd.peek()
@@ -413,7 +429,10 @@ def parse_params(hd: HToken) -> Result[Params]:
 
         if isinstance(read.data, Ident):
             hd.bump()
+
+            # TODO: Waiting mypy 0.940
             inner.append(read.span.with_data(read.data))
+
             read = hd.peek()
             if read is None:
                 return hd.err("Invalid Params", "unclosed '(' at end of file", start)
@@ -433,22 +452,28 @@ def parse_target(hd: HToken) -> Result[Target]:
     if read is None or read.data != Symbol.OPENBRACK:
         return hd.err("Invalid Target", "should begin with '['", start)
     hd.bump()
+
     # Ident
     read = hd.peek()
     if read is None or not isinstance(read.data, Ident):
         return hd.err("Invalid Target", "should have a name", start)
     hd.bump()
+
+    # TODO: Waiting mypy 0.940
     name = read.span.with_data(read.data)
+
     # ']'
     read = hd.peek()
     if read is None or read.data != Symbol.CLOSEBRACK:
         return hd.err("Invalid Target", "target name should be followed by ']'", start)
     hd.bump()
+
     # ';'
     read = hd.peek()
     if read is None or read.data != Symbol.SEMI:
         return hd.err("Invalid Target", "should be ended by ';'", start)
     hd.bump()
+
     return Target(name)
 
 
