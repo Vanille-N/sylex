@@ -21,6 +21,7 @@ def chars_of_text(text: str) -> Chars:
 class Blank:
     pass
 
+
 Token = Symbol | Ident
 Tokens = Stream[Token]
 HToken = Head[Token]

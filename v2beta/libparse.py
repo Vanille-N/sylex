@@ -122,7 +122,7 @@ class Stream(Generic[T]):
     def append(self, data: Spanned[T]) -> None:
         self.data.append(data)
 
-    def peek(self, idx: int) -> Spanned[T]|None:
+    def peek(self, idx: int) -> Spanned[T] | None:
         if idx >= len(self.data):
             return None
         return self.data[idx]
