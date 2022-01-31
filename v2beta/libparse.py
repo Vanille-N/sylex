@@ -87,33 +87,78 @@ class Span:
             text = self.text or other.text
             return Span(min(other.start, self.start), max(other.end, self.end), text)
 
-    def is_one_line(self) -> bool:
-        return self.start.line == self.end.line
+    def line_diff(self) -> int:
+        return self.end.line - self.start.line
 
     def __str__(self) -> str:
         return f"({self.start}..{self.end})"
 
     def show(self) -> str:
+        if self.text is None:
+            if self.start > self.end:
+                return "Empty span"
+            else:
+                return "At end of file"
         return self.text.show(self)
-
 
 class Text:
     def __init__(self, raw: str) -> None:
         self.lines = raw.split('\n')
 
     def show(self, span: Span) -> str:
-        if span.is_one_line():
-            s = self.lines[span.start.line] + "\n"
-            s += " " * span.start.col + "^" * (span.end.col + 1 - span.start.col)
+        assert span.start <= span.end
+        assert span.end.line < len(self.lines)
+        nlines = span.line_diff()
+        linenum_length = len(str(len(self.lines))) + 1
+        blank = "     "
+        start_dots = "  ..."
+        end_dots = "...  "
+        def lineno(n: int|None) -> str:
+            s = str(n) if n is not None else ""
+            padding = " " * (linenum_length - len(s))
+            return f"{padding}{s} | "
+        if nlines == 0:
+            line = self.lines[span.start.line]
+            before = span.start.col
+            after = span.end.col + 1 - span.start.col
+            s = lineno(span.start.line) + blank + line + "\n"
+            s += lineno(None) + blank + " " * before + "^" * after
             return s
         else:
-            s = self.lines[span.start.line] + "\n"
-            s += " " * span.start.col + "^" * (len(self.lines[span.start.line]) + 1 - span.start.col) + "\n"
-            s += "    ...\n"
-            s += self.lines[span.end.line] + "\n"
-            s += "^" * (span.end.col + 1)
+            top_line = self.lines[span.start.line]
+            bot_line = self.lines[span.end.line]
+            top_before = span.start.col
+            top_after = len(top_line) - top_before
+            bot_before = 0
+            bot_after = span.end.col + 1
+            s = lineno(span.start.line) + blank + top_line + "\n"
+            s += lineno(None) + blank + " " * top_before + "^" * top_after + end_dots + "\n"
+            if nlines >= 2:
+                s += lineno(span.start.line + 1) + blank + self.lines[span.start.line + 1] + "\n"
+            if nlines >= 4:
+                nbcut = nlines - 3
+                s += lineno(None) + blank + f"    ({nbcut} lines cut)\n"
+            if nlines >= 3:
+                s += lineno(span.end.line - 1) + blank + self.lines[span.end.line - 1] + "\n"
+            s += lineno(span.end.line) + blank + bot_line + "\n"
+            s += lineno(None) + start_dots + "^" * bot_after
             return s
 
+if __name__ == "__main__":
+    text = Text('\n'.join(f"0123456789ABCDEFGHIJKLMNOPQRST ({i})" for i in range(20)))
+    print("=" * 50)
+    print(text.show(Span(Loc(0,3), Loc(0,7), None)))
+    print("=" * 50)
+    print(text.show(Span(Loc(1,9), Loc(2,3), None)))
+    print("=" * 50)
+    print(text.show(Span(Loc(1,9), Loc(3,3), None)))
+    print("=" * 50)
+    print(text.show(Span(Loc(1,9), Loc(4,3), None)))
+    print("=" * 50)
+    print(text.show(Span(Loc(1,9), Loc(5,3), None)))
+    print("=" * 50)
+    print(text.show(Span(Loc(5,9), Loc(15,3), None)))
+    print("=" * 50)
 
 @dataclass
 class Spanned(Generic[T]):
