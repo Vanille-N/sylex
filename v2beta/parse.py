@@ -1,6 +1,7 @@
 from os import path
 
 from libparse import Error, Head, Loc, Maybe, Result, Span, Spanned, SpanResult, Stream, Text
+from typing import Callable, TypeVar
 from sylex_ast import *
 
 Chars = Stream[str]
@@ -172,9 +173,16 @@ def tokens_of_chars(chars: Chars) -> Result[Tokens]:
     return toks
 
 
-def ast_of_tokens(tokens: Tokens) -> SpanResult[DefList]:
+U = TypeVar("U")
+def ast_of_tokens(tokens: Tokens, target: Callable[[HToken], Result[U]]) -> SpanResult[U]:
     hd = Head.start(tokens)
-    res: SpanResult[DefList] = hd.sub(parse_deflist)
+    start = hd.span()
+    res: SpanResult[DefList] = hd.sub(target)
+    read = hd.peek()
+    if read is None:
+        return res
+    else:
+        return Error("Extra text", f"expected end of file, found {read}", hd.until(start))
     return res
 
 
@@ -487,23 +495,18 @@ def parse_target(hd: HToken) -> Result[Target]:
 
     return Target(name)
 
-
-def main(fname: str) -> SpanResult[DefList]:
-    if not path.exists(fname):
-        return Error(
-            "File not found", f"configuration file '{fname}' does not exist", None
-        )
-    with open(fname, "r") as f:
-        raw = f.read()
+def main(raw: str, target: Callable[[HToken], Result[U]]) -> SpanResult[U]:
     chars = chars_of_raw(raw)
     toks = tokens_of_chars(chars)
     if isinstance(toks, Error):
         return toks
-    ast = ast_of_tokens(toks)
+    ast = ast_of_tokens(toks, target)
     if isinstance(ast, Error):
         return ast
     return ast
 
 
 if __name__ == "__main__":
-    print(main("sylex.conf"))
+    with open("sylex.conf") as f:
+        raw = f.read()
+    print(main(raw, parse_deflist))

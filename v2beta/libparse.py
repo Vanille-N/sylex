@@ -93,19 +93,27 @@ class Span:
     def __str__(self) -> str:
         return f"({self.start}..{self.end})"
 
-    def show(self) -> str:
+    def show(self, color="") -> str:
         if self.text is None:
             if self.start > self.end:
                 return "Empty span"
             else:
                 return "At end of file"
-        return self.text.show(self)
+        return self.text.show(self, color)
 
 class Text:
     def __init__(self, raw: str) -> None:
         self.lines = raw.split('\n')
 
-    def show(self, span: Span) -> str:
+    RED = "\x1b[31m"
+    GREEN = "\x1b[32m"
+    YELLOW = "\x1b[33m"
+    BLUE = "\x1b[34m"
+
+    def show(self, span: Span, color="") -> str:
+        reset = "\x1b[0m"
+        bold = "\x1b[1m"
+        grey = "\x1b[97m"
         assert span.start <= span.end
         assert span.end.line < len(self.lines)
         nlines = span.line_diff()
@@ -116,13 +124,13 @@ class Text:
         def lineno(n: int|None) -> str:
             s = str(n) if n is not None else ""
             padding = " " * (linenum_length - len(s))
-            return f"{padding}{s} | "
+            return f"{color}{bold}{padding}{s} | {reset}"
         if nlines == 0:
             line = self.lines[span.start.line]
             before = span.start.col
             after = span.end.col + 1 - span.start.col
-            s = lineno(span.start.line) + blank + line + "\n"
-            s += lineno(None) + blank + " " * before + "^" * after
+            s = lineno(span.start.line) + blank + grey + line[:before] + reset + bold + line[before:before+after] + reset + grey + line[before+after:] + reset + "\n"
+            s += lineno(None) + blank + " " * before + color + "^" * after + reset
             return s
         else:
             top_line = self.lines[span.start.line]
@@ -131,33 +139,33 @@ class Text:
             top_after = len(top_line) - top_before
             bot_before = 0
             bot_after = span.end.col + 1
-            s = lineno(span.start.line) + blank + top_line + "\n"
-            s += lineno(None) + blank + " " * top_before + "^" * top_after + end_dots + "\n"
+            s = lineno(span.start.line) + blank + grey + top_line[:top_before] + reset + bold + top_line[top_before:] + reset + "\n"
+            s += lineno(None) + blank + " " * top_before + color + "^" * top_after + end_dots + reset + "\n"
             if nlines >= 2:
-                s += lineno(span.start.line + 1) + blank + self.lines[span.start.line + 1] + "\n"
+                s += lineno(span.start.line + 1) + blank + bold + self.lines[span.start.line + 1] + "\n"
             if nlines >= 4:
                 nbcut = nlines - 3
-                s += lineno(None) + blank + f"    ({nbcut} lines cut)\n"
+                s += lineno(None) + blank + f"    {grey}({nbcut} lines cut){reset}\n"
             if nlines >= 3:
-                s += lineno(span.end.line - 1) + blank + self.lines[span.end.line - 1] + "\n"
-            s += lineno(span.end.line) + blank + bot_line + "\n"
-            s += lineno(None) + start_dots + "^" * bot_after
+                s += lineno(span.end.line - 1) + blank + bold + self.lines[span.end.line - 1] + reset + "\n"
+            s += lineno(span.end.line) + blank + bold + bot_line[:bot_after] + reset + grey + bot_line[bot_after:] + reset + "\n"
+            s += lineno(None) + color + start_dots + "^" * bot_after + reset
             return s
 
 if __name__ == "__main__":
     text = Text('\n'.join(f"0123456789ABCDEFGHIJKLMNOPQRST ({i})" for i in range(20)))
     print("=" * 50)
-    print(text.show(Span(Loc(0,3), Loc(0,7), None)))
+    print(text.show(Span(Loc(0,3), Loc(0,7), None), Text.RED))
     print("=" * 50)
-    print(text.show(Span(Loc(1,9), Loc(2,3), None)))
+    print(text.show(Span(Loc(1,9), Loc(2,3), None), Text.GREEN))
     print("=" * 50)
-    print(text.show(Span(Loc(1,9), Loc(3,3), None)))
+    print(text.show(Span(Loc(1,9), Loc(3,3), None), Text.YELLOW))
     print("=" * 50)
-    print(text.show(Span(Loc(1,9), Loc(4,3), None)))
+    print(text.show(Span(Loc(1,9), Loc(4,3), None), Text.BLUE))
     print("=" * 50)
-    print(text.show(Span(Loc(1,9), Loc(5,3), None)))
+    print(text.show(Span(Loc(1,9), Loc(5,3), None), Text.BLUE))
     print("=" * 50)
-    print(text.show(Span(Loc(5,9), Loc(15,3), None)))
+    print(text.show(Span(Loc(5,9), Loc(15,3), None), Text.BLUE))
     print("=" * 50)
 
 @dataclass
@@ -347,7 +355,7 @@ class Head(Generic[T]):
         res = fn(copy)
         end = copy.span(-1)
         print(
-            f"function {fn.__name__}\n\tread {res}\n=====\n{start.until(end).show()}\n====="
+            f"function {fn.__name__}\n\tread {res}\n=====\n{start.until(end).show(Text.YELLOW)}\n====="
         )
         if isinstance(res, Error):
             return res
