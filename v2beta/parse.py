@@ -151,8 +151,8 @@ def tokens_of_chars(chars: Chars) -> Result[Tokens]:
 
         if isinstance(res, Error):
             inner = res
-            if inner.extra is None:
-                inner.extra = hd.until(fwd)
+            if inner.span is None:
+                inner.span = hd.until(fwd)
                 print(hd.span(), fwd.span(), hd.until(fwd))
             return inner
 
@@ -177,12 +177,12 @@ U = TypeVar("U")
 def ast_of_tokens(tokens: Tokens, target: Callable[[HToken], Result[U]]) -> SpanResult[U]:
     hd = Head.start(tokens)
     start = hd.span()
-    res: SpanResult[DefList] = hd.sub(target)
+    res: SpanResult[U] = hd.sub(target)
     read = hd.peek()
     if read is None:
         return res
     else:
-        return Error("Extra text", f"expected end of file, found {read}", hd.until(start))
+        return Error("Extra text", f"expected end of file, found {read}", hd.until(start), None)
     return res
 
 

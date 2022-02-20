@@ -93,7 +93,7 @@ class Span:
     def __str__(self) -> str:
         return f"({self.start}..{self.end})"
 
-    def show(self, color="") -> str:
+    def show(self, color: str = "") -> str:
         if self.text is None:
             if self.start > self.end:
                 return "Empty span"
@@ -110,7 +110,7 @@ class Text:
     YELLOW = "\x1b[33m"
     BLUE = "\x1b[34m"
 
-    def show(self, span: Span, color="") -> str:
+    def show(self, span: Span, color: str = "") -> str:
         reset = "\x1b[0m"
         bold = "\x1b[1m"
         grey = "\x1b[97m"
@@ -210,23 +210,38 @@ class Stream(Generic[T]):
         return Stream(self.data[idx])
 
 
-BackRef = Tuple[Span, Span]
-ErrExtra = Span | None | BackRef
-
-
 @dataclass
 class Error:
     kind: str
     msg: str
-    extra: ErrExtra
+    span: Span
+    cause: Error | None
 
 
 class ErrLevel(Enum):
+    INTERNAL = 5
     CRITICAL = 4
     WARNING = 3
     DETAIL = 2
     INFO = 1
+    NONE = 0
 
+    def __lt__(self, other: ErrLevel) -> bool:
+        return self.value.__lt__(other.value)
+    def __le__(self, other: ErrLevel) -> bool:
+        return self.value.__le__(other.value)
+    def __gt__(self, other: ErrLevel) -> bool:
+        return self.value.__gt__(other.value)
+    def __ge__(self, other: ErrLevel) -> bool:
+        return self.value.__ge__(other.value)
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, ErrLevel):
+            return False
+        return self.value.__eq__(other.value)
+    def __ne__(self, other: Any) -> bool:
+        if not isinstance(other, ErrLevel):
+            return True
+        return self.value.__ne__(other.value)
 
 Result = Union[T, Error]
 SpanResult = Result[Spanned[T]]
@@ -373,4 +388,4 @@ class Head(Generic[T]):
         return self._span_absolute(self._cursor + idx)
 
     def err(self, kind: str, msg: str, span: Span) -> Error:
-        return Error(kind, msg, self.until(span))
+        return Error(kind, msg, self.until(span), None)
